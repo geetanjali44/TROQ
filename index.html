@@ -3945,41 +3945,63 @@ function troqRenderItems(content){troqCloseScanPage();content.innerHTML='<h1>Ite
 </style>
 
 
-<script id="troqPcEscapeDashboardOnly">
+<style id="troqPcEscDashboardFixStyle">
+@media (min-width:901px) and (pointer:fine){
+  body.troq-pc-counter-safe.troq-pc-dashboard-view #troqLivePcPanel{
+    display:none!important;
+  }
+  body.troq-pc-counter-safe.troq-pc-dashboard-view #troqPcPrinterDock{
+    display:none!important;
+  }
+  body.troq-pc-counter-safe.troq-pc-dashboard-view #troqDashContent{
+    display:block!important;
+  }
+  body.troq-pc-counter-safe.troq-pc-dashboard-view #mainUI2,
+  body.troq-pc-counter-safe.troq-pc-dashboard-view #troqDashboard{
+    display:block!important;
+  }
+}
+</style>
+
+<script id="troqPcEscDashboardFixLogic">
 (function(){
-  function troqIsPcOnly(){
+  function isPc(){
     return window.matchMedia('(min-width:901px) and (pointer:fine)').matches;
   }
 
-  document.addEventListener('keydown', function(e){
-    if(e.key !== 'Escape' || !troqIsPcOnly()) return;
+  function openDashboard(){
+    if(!isPc()) return;
+    document.body.classList.add('troq-pc-dashboard-view');
 
+    const main2=document.getElementById('mainUI2');
+    const dash=document.getElementById('troqDashboard');
+    const editor=document.getElementById('troqBillEditor');
+
+    if(main2) main2.classList.add('active');
+    if(dash) dash.hidden=false;
+    if(editor) editor.hidden=true;
+
+    if(typeof troqShowDashboard==='function'){
+      troqShowDashboard('home');
+    }
+  }
+
+  document.addEventListener('keydown',function(e){
+    if(!isPc() || (e.key!=='Escape' && e.key!=='Esc')) return;
     e.preventDefault();
+    e.stopImmediatePropagation();
+    openDashboard();
+  },true);
 
-    /* Close only PC billing/live overlays if they are open. */
-    const billEditor = document.getElementById('troqBillEditor');
-    if(billEditor) billEditor.hidden = true;
-
-    const scanPage = document.getElementById('troqScanPage');
-    if(scanPage && scanPage.classList.contains('open') && typeof troqCloseScanPage === 'function'){
-      troqCloseScanPage();
-    }
-
-    const scannerOverlay = document.getElementById('troqScannerOverlay');
-    if(scannerOverlay && typeof troqCloseScannerSheet === 'function'){
-      try{ troqCloseScannerSheet(); }catch(_){}
-    }
-
-    /* Return to the app's existing dashboard. No mobile behavior changed. */
+  /* Phone live sync is untouched. When a new live cart update arrives,
+     show the live products screen again automatically on PC. */
+  window.addEventListener('troq-data-loaded',function(){
+    if(!isPc()) return;
     try{
-      if(typeof troqShowDashboard === 'function'){
-        troqShowDashboard('home');
+      if(Array.isArray(troqMyData?.live_cart) && troqMyData.live_cart.length){
+        document.body.classList.remove('troq-pc-dashboard-view');
       }
-      const dashboard = document.getElementById('troqDashboard');
-      if(dashboard) dashboard.hidden = false;
-    }catch(err){
-      console.warn('PC ESC dashboard:', err);
-    }
+    }catch(_){}
   });
 })();
 </script>
