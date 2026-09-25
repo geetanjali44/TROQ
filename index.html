@@ -2283,7 +2283,7 @@ troqField('troqBillPreview').onclick=async()=>{
  try{
    const bills=Array.isArray(troqMyData.bills)?troqMyData.bills:[];
    const receiptId=String(bill.id||crypto.randomUUID?.()||Date.now());
-   const finishedData={...troqMyData,bills:[...bills,bill],live_cart:[],live_cart_updated_at:new Date().toISOString(),live_last_receipt:{id:receiptId,bill,created_at:new Date().toISOString()}};
+   const finishedData={...troqMyData,bills:[...bills,bill],live_cart:[],live_cart_updated_at:new Date().toISOString(),live_last_receipt:{id:receiptId,bill,created_at:new Date().toISOString(),source_device:troqDeviceId}};
    await troqSaveMyData(finishedData);
    troqScanCart=[];
    troqLiveLastStamp=String(finishedData.live_cart_updated_at||'');
@@ -2983,6 +2983,11 @@ document.addEventListener("keydown",e=>{
 <script id="troqInventoryScript">
 let troqScanStream=null,troqScanTimer=null,troqBarcodeDetector=null,troqCameraFacing='environment',troqScanStarting=false,troqZXingReader=null,troqZXingControls=null,troqScanGeneration=0,troqScanBusy=false,troqScanBillMode=false,troqScanCart=[],troqScanLastCode='',troqScanLastAt=0;
 let troqLiveSyncBusy=false,troqLivePollTimer=null,troqLiveLastStamp='';
+const troqDeviceId=(()=>{
+ let id=localStorage.getItem('troqDeviceId');
+ if(!id){id=(crypto.randomUUID?.()||('dev-'+Date.now()+'-'+Math.random().toString(36).slice(2)));localStorage.setItem('troqDeviceId',id);}
+ return id;
+})();
 
 function troqLiveNormalizeCart(value){
  return Array.isArray(value)?value.map(x=>({
@@ -3019,17 +3024,15 @@ async function troqLivePullCart(force=false){
  if(troqLiveSyncBusy||!localStorage.getItem('troqUserToken'))return;
  try{
   const remote=await troqLiveFetchRemote();
-  const stamp=String(remote?.live_cart_updated_at||'');
+  // IMPORTANT: always replace local account data with the newest server object.
+  // Receipt sync must not depend on whether live_cart itself changed.
+  troqMyData=remote||{};
+  const stamp=String(troqMyData.live_cart_updated_at||'');
   if(force||stamp!==troqLiveLastStamp){
    troqLiveLastStamp=stamp;
-   troqScanCart=troqLiveNormalizeCart(remote?.live_cart);
-   // Keep all other fresh server data too, so PC/mobile remain on the same account state.
-   troqMyData={...remote};
+   troqScanCart=troqLiveNormalizeCart(troqMyData.live_cart);
    if(document.getElementById('troqScanPage'))troqRenderScanCart();
    troqRenderLivePcPanel();
-  }else{
-   // Even when cart did not change, keep receipt/bill state fresh.
-   troqMyData={...troqMyData,...remote};
   }
   troqCheckMobileReceipt();
  }catch(e){console.warn('Live cart refresh failed',e);}
@@ -3081,12 +3084,12 @@ function troqRenderMobileReceipt(bill){
 }
 function troqLatestSyncedReceipt(data=troqMyData){
  const r=data?.live_last_receipt;
- return r&&r.bill&&r.id?{id:String(r.id),bill:r.bill}:null;
+ return r&&r.bill&&r.id?{id:String(r.id),bill:r.bill,source_device:String(r.source_device||'')}:null;
 }
 function troqCheckMobileReceipt(){
- if(!troqIsMobileBillingDevice())return;
  const latest=troqLatestSyncedReceipt();
  if(!latest)return;
+ if(latest.source_device&&latest.source_device===troqDeviceId)return;
  const seen=localStorage.getItem('troqLastReceiptSeen');
  if(seen===latest.id)return;
  localStorage.setItem('troqLastReceiptSeen',latest.id);
@@ -3145,10 +3148,11 @@ function troqStartLivePolling(){
  clearInterval(troqLivePollTimer);
  if(!localStorage.getItem('troqUserToken'))return;
  void troqLivePullCart(true);
- troqLivePollTimer=setInterval(()=>void troqLivePullCart(false),1200);
+ troqLivePollTimer=setInterval(()=>void troqLivePullCart(false),700);
 }
 window.addEventListener('troq-data-loaded',()=>{troqStartLivePolling();troqCheckMobileReceipt();});
 window.addEventListener('focus',()=>{if(localStorage.getItem('troqUserToken'))void troqLivePullCart(true);});
+setTimeout(()=>{if(localStorage.getItem('troqUserToken'))troqStartLivePolling();},800);
 
 function troqInventory(){return Array.isArray(troqMyData.products)?troqMyData.products:[];}
 function troqScannerUI(){let root=document.getElementById('troqScannerOverlay');if(root)return root;root=document.createElement('div');root.id='troqScannerOverlay';root.className='troqScannerOverlay';root.innerHTML='<div class="troqScannerBackdrop" data-scan-close></div><section class="troqScannerPanel" role="dialog" aria-modal="true" aria-label="Scanner actions"><div class="troqScannerHandle"></div><h2>Scanner</h2><button class="troqScannerChoice" id="troqScannerAdd"><svg class="troqInlineIcon fa-solid fa-barcode" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5v14M6 5v14M10 5v14M13 5v14M17 5v14M21 5v14"/></svg> Add product</button><button class="troqScannerChoice" id="troqScannerBill"><svg class="troqInlineIcon fa-solid fa-receipt" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 3h16v18l-4-2-4 2-4-2-4 2V3Zm4 5h8M8 12h8"/></svg> Create bill</button><button class="troqScannerClose" data-scan-close>Close</button></section>';document.body.appendChild(root);root.querySelectorAll('[data-scan-close]').forEach(b=>b.onclick=troqCloseScannerSheet);root.querySelector('#troqScannerAdd').onclick=()=>{troqCloseScannerSheet();troqOpenScanPage();};root.querySelector('#troqScannerBill').onclick=()=>{if(!troqInventory().length)return;troqCloseScannerSheet();troqOpenBillEditor();};return root;}
