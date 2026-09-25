@@ -3309,15 +3309,70 @@ function troqRenderLivePcPanel(){
  const logged=!!localStorage.getItem('troqUserToken');
  panel.hidden=!logged||!troqScanCart.length;
  if(panel.hidden)return;
+
  const total=troqScanCart.reduce((s,p)=>s+(Number(p.price)||0)*(Number(p.qty)||0),0);
- panel.innerHTML='<div class="troqLivePcHead"><h3><span class="troqLiveDot"></span>Live bill</h3><span class="troqLivePcStatus">Phone sync</span></div>'+
-  troqScanCart.map(p=>'<div class="troqLivePcLine"><span class="troqLivePcName">'+troqEsc(p.name)+'<small>'+troqBillMoney(p.price*p.qty)+'</small></span><button type="button" data-live-minus="'+troqEsc(p.id)+'">−</button><strong>'+p.qty+'</strong><button type="button" data-live-plus="'+troqEsc(p.id)+'">+</button></div>').join('')+
-  '<div class="troqLivePcTotal"><strong>Total</strong><strong>'+troqBillMoney(total)+'</strong></div>'+
-  '<button type="button" class="troqLivePcCreate" id="troqLivePcCreate">Create bill</button>'+
-  (troqIsDesktopCounter()?'<button type="button" class="troqLivePcClear" id="troqLivePcPrinter" style="border-color:#ff2380;color:#ff2380">Bluetooth printer</button>':'')+
-  '<button type="button" class="troqLivePcClear" id="troqLivePcClear">Clear live cart</button>';
- panel.querySelectorAll('[data-live-minus]').forEach(btn=>btn.onclick=async()=>{const i=troqScanCart.findIndex(p=>p.id===btn.dataset.liveMinus);if(i<0)return;if(troqScanCart[i].qty<=1)troqScanCart.splice(i,1);else troqScanCart[i].qty--;troqRenderLivePcPanel();await troqLiveSaveCart();});
- panel.querySelectorAll('[data-live-plus]').forEach(btn=>btn.onclick=async()=>{const p=troqScanCart.find(p=>p.id===btn.dataset.livePlus);if(!p)return;p.qty++;troqRenderLivePcPanel();await troqLiveSaveCart();});
+
+ const phonePeLogo='data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect width="48" height="48" rx="12" fill="#5f259f"/><text x="24" y="32" text-anchor="middle" font-family="Arial" font-size="24" font-weight="700" fill="white">P</text></svg>');
+ const gpayLogo='data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect width="48" height="48" rx="12" fill="#f7f7f7"/><text x="24" y="32" text-anchor="middle" font-family="Arial" font-size="23" font-weight="700" fill="#4285f4">G</text></svg>');
+ const paytmLogo='data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect width="48" height="48" rx="12" fill="#eaf8ff"/><text x="24" y="31" text-anchor="middle" font-family="Arial" font-size="17" font-weight="700" fill="#00a8e0">Pay</text></svg>');
+
+ panel.innerHTML=
+  '<div class="troqLivePcHead">'+
+    '<h3><span class="troqLiveDot"></span>Live bill</h3>'+
+    '<span class="troqLivePcStatus">Phone sync</span>'+
+  '</div>'+
+  '<div class="troqLivePcLayout">'+
+    '<section class="troqLiveProductsCard">'+
+      '<div class="troqLiveSectionTitle">Products</div>'+
+      '<div class="troqLiveProductsList">'+
+        troqScanCart.map(p=>
+          '<div class="troqLivePcLine">'+
+            '<div class="troqLivePcName">'+
+              '<strong>'+troqEsc(p.name)+'</strong>'+
+              '<small>'+troqBillMoney(p.price)+' each</small>'+
+            '</div>'+
+            '<div class="troqLiveQty">'+
+              '<button type="button" data-live-minus="'+troqEsc(p.id)+'">−</button>'+
+              '<strong>'+p.qty+'</strong>'+
+              '<button type="button" data-live-plus="'+troqEsc(p.id)+'">+</button>'+
+            '</div>'+
+            '<div class="troqLiveLineAmount">'+troqBillMoney((Number(p.price)||0)*(Number(p.qty)||0))+'</div>'+
+          '</div>'
+        ).join('')+
+      '</div>'+
+    '</section>'+
+    '<aside class="troqLivePayCard">'+
+      '<div class="troqLiveSectionTitle">Payment</div>'+
+      '<div class="troqLivePayMethods">'+
+        '<button type="button" class="troqLivePayMethod" data-pay="phonepe"><img src="'+phonePeLogo+'" alt=""><span>PhonePe</span></button>'+
+        '<button type="button" class="troqLivePayMethod" data-pay="gpay"><img src="'+gpayLogo+'" alt=""><span>Google Pay</span></button>'+
+        '<button type="button" class="troqLivePayMethod" data-pay="paytm"><img src="'+paytmLogo+'" alt=""><span>Paytm</span></button>'+
+      '</div>'+
+      '<div class="troqLivePcTotal"><span>Total</span><strong>'+troqBillMoney(total)+'</strong></div>'+
+      (troqIsDesktopCounter()?'<button type="button" class="troqLivePcClear troqLivePrinterBtn" id="troqLivePcPrinter">Bluetooth printer</button>':'')+
+      '<button type="button" class="troqLivePcCreate" id="troqLivePcCreate">Create bill</button>'+
+      '<button type="button" class="troqLivePcClear" id="troqLivePcClear">Clear live cart</button>'+
+    '</aside>'+
+  '</div>';
+
+ panel.querySelectorAll('[data-live-minus]').forEach(btn=>btn.onclick=async()=>{
+  const i=troqScanCart.findIndex(p=>p.id===btn.dataset.liveMinus);
+  if(i<0)return;
+  if(troqScanCart[i].qty<=1)troqScanCart.splice(i,1);else troqScanCart[i].qty--;
+  troqRenderLivePcPanel();
+  await troqLiveSaveCart();
+ });
+ panel.querySelectorAll('[data-live-plus]').forEach(btn=>btn.onclick=async()=>{
+  const p=troqScanCart.find(p=>p.id===btn.dataset.livePlus);
+  if(!p)return;
+  p.qty++;
+  troqRenderLivePcPanel();
+  await troqLiveSaveCart();
+ });
+ panel.querySelectorAll('.troqLivePayMethod').forEach(btn=>btn.onclick=()=>{
+  panel.querySelectorAll('.troqLivePayMethod').forEach(x=>x.classList.remove('selected'));
+  btn.classList.add('selected');
+ });
  panel.querySelector('#troqLivePcCreate').onclick=troqLiveFillBillEditor;
  panel.querySelector('#troqLivePcPrinter')?.addEventListener('click',()=>void troqConnectPcBluetoothPrinter());
  panel.querySelector('#troqLivePcClear').onclick=()=>void troqLiveClearCart();
@@ -4156,184 +4211,228 @@ function troqRenderItems(content){troqCloseScanPage();content.innerHTML='<h1>Ite
 })();
 </script>
 
-
-<style id="troqPcLivePaymentUi">
+<style id="troqLiveCleanPcUi">
 @media (min-width:901px) and (pointer:fine){
   body.troq-pc-counter-safe:not(.troq-pc-insights-first) #troqLivePcPanel{
-    display:grid!important;
-    grid-template-columns:minmax(0,1.6fr) minmax(330px,.8fr)!important;
-    grid-template-rows:auto 1fr!important;
-    gap:18px!important;
+    position:fixed!important;
+    z-index:1200!important;
     top:96px!important;
-    left:28px!important;
-    right:28px!important;
+    left:30px!important;
+    right:30px!important;
     bottom:28px!important;
-    height:auto!important;
     width:auto!important;
     max-width:none!important;
-    padding:0!important;
-    background:transparent!important;
-    border:0!important;
-    box-shadow:none!important;
-    overflow:visible!important;
-  }
-
-  body.troq-pc-counter-safe:not(.troq-pc-insights-first) #troqLivePcPanel .troqLivePcHead{
-    grid-column:1 / -1!important;
-    grid-row:1!important;
-    margin:0!important;
-    padding:16px 20px!important;
-    background:#fff!important;
-    border:1px solid #ececec!important;
-    border-radius:16px!important;
-  }
-
-  body.troq-pc-counter-safe:not(.troq-pc-insights-first) #troqLivePcPanel .troqLivePcItems{
-    grid-column:1!important;
-    grid-row:2!important;
-    display:block!important;
-    min-height:0!important;
-    max-height:calc(100vh - 190px)!important;
-    overflow-y:auto!important;
-    margin:0!important;
-    padding:5px 20px!important;
-    background:#fff!important;
-    border:1px solid #ececec!important;
-    border-radius:16px!important;
-  }
-
-  body.troq-pc-counter-safe:not(.troq-pc-insights-first) #troqLivePcPanel .troqLivePcRow{
-    display:flex!important;
-    width:100%!important;
-    min-height:68px!important;
-    margin:0!important;
-    padding:13px 0!important;
-    border-bottom:1px solid #f0f0f0!important;
-  }
-
-  body.troq-pc-counter-safe:not(.troq-pc-insights-first) #troqLivePcPanel .troqLivePcFoot{
-    grid-column:2!important;
-    grid-row:2!important;
+    height:auto!important;
     display:flex!important;
     flex-direction:column!important;
-    align-self:start!important;
+    padding:0!important;
     margin:0!important;
-    padding:18px!important;
+    background:transparent!important;
+    border:0!important;
+    border-radius:0!important;
+    box-shadow:none!important;
+    overflow:hidden!important;
+  }
+  body.troq-pc-counter-safe.troq-pc-insights-first #troqLivePcPanel{
+    display:none!important;
+  }
+
+  #troqLivePcPanel .troqLivePcHead{
+    flex:none!important;
+    height:66px!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:space-between!important;
+    padding:0 20px!important;
+    margin:0 0 16px!important;
     background:#fff!important;
-    border:1px solid #ececec!important;
+    border:1px solid #e9e9e9!important;
+    border-radius:16px!important;
+  }
+  #troqLivePcPanel .troqLivePcHead h3{
+    display:flex!important;
+    align-items:center!important;
+    gap:8px!important;
+    margin:0!important;
+    font-size:19px!important;
+  }
+
+  #troqLivePcPanel .troqLivePcLayout{
+    flex:1!important;
+    min-height:0!important;
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) 340px!important;
+    gap:16px!important;
+  }
+
+  #troqLivePcPanel .troqLiveProductsCard,
+  #troqLivePcPanel .troqLivePayCard{
+    min-width:0!important;
+    background:#fff!important;
+    border:1px solid #e9e9e9!important;
     border-radius:16px!important;
   }
 
-  #troqPcPaymentChoices{
-    display:flex;
-    flex-direction:column;
-    gap:9px;
-    width:100%;
-    margin:4px 0 17px;
+  #troqLivePcPanel .troqLiveProductsCard{
+    display:flex!important;
+    flex-direction:column!important;
+    min-height:0!important;
+    overflow:hidden!important;
   }
-  .troqPcPaymentTitle{
-    margin:0 0 9px;
-    font:600 14px 'Outfit',sans-serif;
-    color:#555;
+  #troqLivePcPanel .troqLiveSectionTitle{
+    flex:none!important;
+    padding:18px 20px!important;
+    border-bottom:1px solid #f0f0f0!important;
+    font:600 16px 'Outfit',sans-serif!important;
+    color:#222!important;
   }
-  .troqPcPaymentChoice{
-    display:flex;
-    align-items:center;
-    width:100%;
-    height:48px;
-    padding:0 13px;
-    gap:11px;
-    border:1px solid #e8e8e8;
-    border-radius:11px;
-    background:#fff;
-    color:#242424;
-    font:600 14px 'Outfit',sans-serif;
-    cursor:pointer;
-    text-align:left;
-  }
-  .troqPcPaymentChoice:hover{background:#fafafa;border-color:#d8d8d8}
-  .troqPcPaymentChoice.selected{border-color:#ff2380;background:#fff5f9}
-  .troqPcPaymentChoice img{
-    width:28px;height:28px;object-fit:contain;border-radius:7px;flex:none;
+  #troqLivePcPanel .troqLiveProductsList{
+    flex:1!important;
+    min-height:0!important;
+    overflow-y:auto!important;
+    padding:0 20px!important;
   }
 
-  body.troq-pc-counter-safe:not(.troq-pc-insights-first) #troqLivePcPanel .troqLivePcTotal{
-    order:2!important;
-    margin:0 0 12px!important;
+  #troqLivePcPanel .troqLivePcLine{
+    width:100%!important;
+    min-height:78px!important;
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) 150px 110px!important;
+    gap:18px!important;
+    align-items:center!important;
     padding:14px 0!important;
+    margin:0!important;
+    border:0!important;
+    border-bottom:1px solid #f1f1f1!important;
+  }
+  #troqLivePcPanel .troqLivePcLine:last-child{border-bottom:0!important}
+
+  #troqLivePcPanel .troqLivePcName{
+    min-width:0!important;
+    display:flex!important;
+    flex-direction:column!important;
+    gap:4px!important;
+  }
+  #troqLivePcPanel .troqLivePcName strong{
+    text-align:left!important;
+    font-size:16px!important;
+    font-weight:600!important;
+    overflow-wrap:anywhere!important;
+  }
+  #troqLivePcPanel .troqLivePcName small{
+    color:#888!important;
+    font-size:13px!important;
+  }
+
+  #troqLivePcPanel .troqLiveQty{
+    display:grid!important;
+    grid-template-columns:38px 1fr 38px!important;
+    gap:7px!important;
+    align-items:center!important;
+  }
+  #troqLivePcPanel .troqLiveQty button{
+    width:38px!important;
+    height:38px!important;
+    padding:0!important;
+    border:0!important;
+    border-radius:10px!important;
+    background:#fff0f6!important;
+    color:#ff2380!important;
+    font-size:20px!important;
+    font-weight:700!important;
+    cursor:pointer!important;
+  }
+  #troqLivePcPanel .troqLiveQty strong{
+    text-align:center!important;
+    font-size:15px!important;
+  }
+  #troqLivePcPanel .troqLiveLineAmount{
+    text-align:right!important;
+    font-size:15px!important;
+    font-weight:600!important;
+    white-space:nowrap!important;
+  }
+
+  #troqLivePcPanel .troqLivePayCard{
+    align-self:start!important;
+    padding-bottom:16px!important;
+    overflow:hidden!important;
+  }
+  #troqLivePcPanel .troqLivePayMethods{
+    display:flex!important;
+    gap:8px!important;
+    padding:16px!important;
+  }
+  #troqLivePcPanel .troqLivePayMethod{
+    flex:1!important;
+    min-width:0!important;
+    height:66px!important;
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:center!important;
+    justify-content:center!important;
+    gap:5px!important;
+    padding:6px!important;
+    border:1px solid #e8e8e8!important;
+    border-radius:11px!important;
+    background:#fff!important;
+    color:#333!important;
+    font:600 11px 'Outfit',sans-serif!important;
+    cursor:pointer!important;
+  }
+  #troqLivePcPanel .troqLivePayMethod img{
+    width:28px!important;
+    height:28px!important;
+    object-fit:contain!important;
+    border-radius:7px!important;
+  }
+  #troqLivePcPanel .troqLivePayMethod.selected{
+    border-color:#ff2380!important;
+    background:#fff5f9!important;
+  }
+
+  #troqLivePcPanel .troqLivePcTotal{
+    display:flex!important;
+    align-items:center!important;
+    justify-content:space-between!important;
+    margin:0 16px 10px!important;
+    padding:15px 0!important;
     border-top:1px solid #eee!important;
     border-bottom:1px solid #eee!important;
+    font-size:18px!important;
   }
-  body.troq-pc-counter-safe:not(.troq-pc-insights-first) #troqLivePcPanel #troqLivePcCreate,
-  body.troq-pc-counter-safe:not(.troq-pc-insights-first) #troqLivePcPanel #troqLivePcPrinter,
-  body.troq-pc-counter-safe:not(.troq-pc-insights-first) #troqLivePcPanel #troqLivePcClear{
+
+  #troqLivePcPanel #troqLivePcPrinter,
+  #troqLivePcPanel #troqLivePcCreate,
+  #troqLivePcPanel #troqLivePcClear{
     position:static!important;
-    width:100%!important;
+    display:block!important;
+    width:calc(100% - 32px)!important;
     height:46px!important;
     min-height:46px!important;
-    margin:7px 0 0!important;
+    margin:8px 16px 0!important;
+    padding:0 14px!important;
     border-radius:11px!important;
+    font:600 14px 'Outfit',sans-serif!important;
+    cursor:pointer!important;
+  }
+  #troqLivePcPanel #troqLivePcCreate{
+    border:0!important;
+    background:#ff2380!important;
+    color:#fff!important;
+  }
+  #troqLivePcPanel #troqLivePcPrinter{
+    border:1px solid #ff2380!important;
+    background:#fff!important;
+    color:#ff2380!important;
+  }
+  #troqLivePcPanel #troqLivePcClear{
+    border:1px solid #e8e8e8!important;
+    background:#f7f7f7!important;
+    color:#333!important;
   }
 }
 </style>
-
-<script id="troqPcLivePaymentUiLogic">
-(function(){
-  function isPc(){
-    return window.matchMedia('(min-width:901px) and (pointer:fine)').matches;
-  }
-
-  function dummyLogo(text,bg,fg){
-    return 'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(
-      '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">'+
-      '<rect width="64" height="64" rx="14" fill="'+bg+'"/>'+
-      '<text x="32" y="40" text-anchor="middle" font-family="Arial" font-size="24" font-weight="700" fill="'+fg+'">'+text+'</text>'+
-      '</svg>'
-    );
-  }
-
-  const methods=[
-    {id:'phonepe',name:'PhonePe',img:dummyLogo('P','#5f259f','#ffffff')},
-    {id:'gpay',name:'Google Pay',img:dummyLogo('G','#ffffff','#4285f4')},
-    {id:'paytm',name:'Paytm',img:dummyLogo('P','#e9f8ff','#00a8e0')}
-  ];
-
-  function mount(){
-    if(!isPc())return;
-    const foot=document.querySelector('#troqLivePcPanel .troqLivePcFoot');
-    if(!foot || foot.querySelector('#troqPcPaymentChoices'))return;
-
-    const wrap=document.createElement('div');
-    wrap.id='troqPcPaymentChoices';
-    wrap.innerHTML='<div class="troqPcPaymentTitle">Payment method</div>'+
-      methods.map(m=>'<button type="button" class="troqPcPaymentChoice" data-pay="'+m.id+'">'+
-        '<img src="'+m.img+'" alt=""><span>'+m.name+'</span></button>').join('');
-
-    foot.insertBefore(wrap,foot.firstChild);
-
-    wrap.querySelectorAll('.troqPcPaymentChoice').forEach(btn=>{
-      btn.onclick=()=>{
-        wrap.querySelectorAll('.troqPcPaymentChoice').forEach(x=>x.classList.remove('selected'));
-        btn.classList.add('selected');
-        wrap.dataset.selected=btn.dataset.pay;
-      };
-    });
-  }
-
-  const observer=new MutationObserver(()=>mount());
-  if(document.readyState==='loading'){
-    document.addEventListener('DOMContentLoaded',()=>{
-      mount();
-      observer.observe(document.body,{childList:true,subtree:true});
-    });
-  }else{
-    mount();
-    observer.observe(document.body,{childList:true,subtree:true});
-  }
-  window.addEventListener('troq-data-loaded',()=>setTimeout(mount,30));
-  setInterval(mount,800);
-})();
-</script>
 
 </body>
 </html>
