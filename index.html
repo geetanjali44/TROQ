@@ -1255,6 +1255,33 @@ button svg.troqInlineIcon{pointer-events:none}
 html body > #troqBillEditor:not([hidden]){position:fixed!important;inset:0!important;z-index:2147483647!important;display:flex!important;visibility:visible!important;opacity:1!important;transform:none!important;background:#fff!important}
 html body > #troqBillEditor[hidden]{display:none!important}
 </style>
+
+<style id="troqLiveSyncStyles">
+/* TROQ MOBILE ↔ PC LIVE CART */
+.troqLivePcPanel{
+  position:fixed;right:22px;top:90px;z-index:1200;width:min(360px,calc(100vw - 44px));
+  max-height:calc(100dvh - 125px);overflow:auto;background:#fff;border:1px solid #eee;
+  border-radius:20px;box-shadow:0 16px 50px rgba(0,0,0,.14);padding:18px;
+  font-family:'Outfit',sans-serif
+}
+.troqLivePcPanel[hidden]{display:none!important}
+.troqLivePcHead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px}
+.troqLivePcHead h3{margin:0;font-size:19px;color:#222}
+.troqLiveDot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#20b15a;margin-right:6px}
+.troqLivePcStatus{font-size:12px;color:#777;white-space:nowrap}
+.troqLivePcLine{display:grid;grid-template-columns:minmax(0,1fr) 38px 38px 38px;gap:7px;align-items:center;padding:11px 0;border-top:1px solid #f2f2f2}
+.troqLivePcLine:first-of-type{border-top:0}
+.troqLivePcName{min-width:0;font-size:14px;font-weight:600;color:#222;overflow-wrap:anywhere}
+.troqLivePcName small{display:block;margin-top:3px;font-size:12px;font-weight:400;color:#777}
+.troqLivePcLine button{height:36px;border:0;border-radius:10px;background:#fff0f6;color:#ff2380;font-size:20px;font-weight:700;cursor:pointer}
+.troqLivePcLine strong{text-align:center;font-size:15px}
+.troqLivePcTotal{display:flex;justify-content:space-between;gap:12px;border-top:1px solid #eee;margin-top:8px;padding-top:14px;font-size:17px}
+.troqLivePcCreate,.troqLivePcClear{width:100%;height:48px;border:0;border-radius:13px;font:600 15px 'Outfit',sans-serif;cursor:pointer}
+.troqLivePcCreate{margin-top:14px;background:#ff2380;color:#fff}
+.troqLivePcClear{margin-top:8px;background:#f6f6f6;color:#444}
+@media(max-width:767px){.troqLivePcPanel{display:none!important}}
+</style>
+
 </head>
 
 <body>
@@ -2217,6 +2244,7 @@ troqField('troqBillPreview').onclick=async()=>{
  try{
    const bills=Array.isArray(troqMyData.bills)?troqMyData.bills:[];
    await troqSaveMyData({...troqMyData,bills:[...bills,bill]});
+   await troqLiveClearCart();
    const html=troqBillReceiptHtml(bill);
    printWindow.document.open();printWindow.document.write(html);printWindow.document.close();
    troqPrintWindow(printWindow);
@@ -2911,6 +2939,111 @@ document.addEventListener("keydown",e=>{
 <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js" defer></script>
 <script id="troqInventoryScript">
 let troqScanStream=null,troqScanTimer=null,troqBarcodeDetector=null,troqCameraFacing='environment',troqScanStarting=false,troqZXingReader=null,troqZXingControls=null,troqScanGeneration=0,troqScanBusy=false,troqScanBillMode=false,troqScanCart=[],troqScanLastCode='',troqScanLastAt=0;
+let troqLiveSyncBusy=false,troqLivePollTimer=null,troqLiveLastStamp='';
+
+function troqLiveNormalizeCart(value){
+ return Array.isArray(value)?value.map(x=>({
+  id:String(x?.id||''),
+  name:String(x?.name||''),
+  qty:Math.max(1,parseInt(x?.qty,10)||1),
+  price:Number(x?.price)||0
+ })).filter(x=>x.id&&x.name):[];
+}
+async function troqLiveFetchRemote(){
+ const token=localStorage.getItem('troqUserToken');
+ if(!token)return null;
+ const {data,error}=await troqDb.rpc('troq_app_load',{p_token:token});
+ if(error)throw error;
+ return data||{};
+}
+async function troqLiveSaveCart(){
+ if(troqLiveSyncBusy||!localStorage.getItem('troqUserToken'))return;
+ troqLiveSyncBusy=true;
+ try{
+  const remote=await troqLiveFetchRemote();
+  const stamp=new Date().toISOString();
+  const next={...remote,live_cart:troqLiveNormalizeCart(troqScanCart),live_cart_updated_at:stamp};
+  const token=localStorage.getItem('troqUserToken');
+  const {error}=await troqDb.rpc('troq_app_save',{p_token:token,p_data:next});
+  if(error)throw error;
+  troqMyData=next;
+  troqLiveLastStamp=stamp;
+  troqRenderLivePcPanel();
+ }catch(e){console.warn('Live cart save failed',e);}
+ finally{troqLiveSyncBusy=false;}
+}
+async function troqLivePullCart(force=false){
+ if(troqLiveSyncBusy||!localStorage.getItem('troqUserToken'))return;
+ try{
+  const remote=await troqLiveFetchRemote();
+  const stamp=String(remote?.live_cart_updated_at||'');
+  if(force||stamp!==troqLiveLastStamp){
+   troqLiveLastStamp=stamp;
+   troqScanCart=troqLiveNormalizeCart(remote?.live_cart);
+   // Keep all other fresh server data too, so PC/mobile remain on the same account state.
+   troqMyData={...remote};
+   if(document.getElementById('troqScanPage'))troqRenderScanCart();
+   troqRenderLivePcPanel();
+  }
+ }catch(e){console.warn('Live cart refresh failed',e);}
+}
+async function troqLiveClearCart(){
+ troqScanCart=[];
+ await troqLiveSaveCart();
+ troqRenderScanCart();
+ troqRenderLivePcPanel();
+}
+function troqLiveFillBillEditor(){
+ if(!troqScanCart.length)return;
+ const editor=troqField('troqBillEditor');
+ if(editor.parentElement!==document.body)document.body.appendChild(editor);
+ troqOpenBillEditor();
+ editor.style.setProperty('z-index','2147483647','important');
+ for(let i=0;i<troqScanCart.length;i++){
+  const item=troqScanCart[i];
+  if(i>0)troqBillAddProduct();
+  const row=troqField('troqBillLines').children[i];
+  if(!row)continue;
+  const name=row.querySelector('[data-product]');
+  const qty=row.querySelector('[data-qty]');
+  const price=row.querySelector('[data-price]');
+  if(name)name.value=item.name;
+  if(qty)qty.value=item.qty;
+  if(price)price.value=item.price;
+ }
+ troqBillRecalculate();
+}
+function troqRenderLivePcPanel(){
+ let panel=document.getElementById('troqLivePcPanel');
+ if(!panel){
+  panel=document.createElement('aside');
+  panel.id='troqLivePcPanel';
+  panel.className='troqLivePcPanel';
+  document.body.appendChild(panel);
+ }
+ const logged=!!localStorage.getItem('troqUserToken');
+ panel.hidden=!logged||!troqScanCart.length;
+ if(panel.hidden)return;
+ const total=troqScanCart.reduce((s,p)=>s+(Number(p.price)||0)*(Number(p.qty)||0),0);
+ panel.innerHTML='<div class="troqLivePcHead"><h3><span class="troqLiveDot"></span>Live bill</h3><span class="troqLivePcStatus">Phone sync</span></div>'+
+  troqScanCart.map(p=>'<div class="troqLivePcLine"><span class="troqLivePcName">'+troqEsc(p.name)+'<small>'+troqBillMoney(p.price*p.qty)+'</small></span><button type="button" data-live-minus="'+troqEsc(p.id)+'">−</button><strong>'+p.qty+'</strong><button type="button" data-live-plus="'+troqEsc(p.id)+'">+</button></div>').join('')+
+  '<div class="troqLivePcTotal"><strong>Total</strong><strong>'+troqBillMoney(total)+'</strong></div>'+
+  '<button type="button" class="troqLivePcCreate" id="troqLivePcCreate">Create bill</button>'+
+  '<button type="button" class="troqLivePcClear" id="troqLivePcClear">Clear live cart</button>';
+ panel.querySelectorAll('[data-live-minus]').forEach(btn=>btn.onclick=async()=>{const i=troqScanCart.findIndex(p=>p.id===btn.dataset.liveMinus);if(i<0)return;if(troqScanCart[i].qty<=1)troqScanCart.splice(i,1);else troqScanCart[i].qty--;troqRenderLivePcPanel();await troqLiveSaveCart();});
+ panel.querySelectorAll('[data-live-plus]').forEach(btn=>btn.onclick=async()=>{const p=troqScanCart.find(p=>p.id===btn.dataset.livePlus);if(!p)return;p.qty++;troqRenderLivePcPanel();await troqLiveSaveCart();});
+ panel.querySelector('#troqLivePcCreate').onclick=troqLiveFillBillEditor;
+ panel.querySelector('#troqLivePcClear').onclick=()=>void troqLiveClearCart();
+}
+function troqStartLivePolling(){
+ clearInterval(troqLivePollTimer);
+ if(!localStorage.getItem('troqUserToken'))return;
+ void troqLivePullCart(true);
+ troqLivePollTimer=setInterval(()=>void troqLivePullCart(false),1200);
+}
+window.addEventListener('troq-data-loaded',()=>troqStartLivePolling());
+window.addEventListener('focus',()=>{if(localStorage.getItem('troqUserToken'))void troqLivePullCart(true);});
+
 function troqInventory(){return Array.isArray(troqMyData.products)?troqMyData.products:[];}
 function troqScannerUI(){let root=document.getElementById('troqScannerOverlay');if(root)return root;root=document.createElement('div');root.id='troqScannerOverlay';root.className='troqScannerOverlay';root.innerHTML='<div class="troqScannerBackdrop" data-scan-close></div><section class="troqScannerPanel" role="dialog" aria-modal="true" aria-label="Scanner actions"><div class="troqScannerHandle"></div><h2>Scanner</h2><button class="troqScannerChoice" id="troqScannerAdd"><svg class="troqInlineIcon fa-solid fa-barcode" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5v14M6 5v14M10 5v14M13 5v14M17 5v14M21 5v14"/></svg> Add product</button><button class="troqScannerChoice" id="troqScannerBill"><svg class="troqInlineIcon fa-solid fa-receipt" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 3h16v18l-4-2-4 2-4-2-4 2V3Zm4 5h8M8 12h8"/></svg> Create bill</button><button class="troqScannerClose" data-scan-close>Close</button></section>';document.body.appendChild(root);root.querySelectorAll('[data-scan-close]').forEach(b=>b.onclick=troqCloseScannerSheet);root.querySelector('#troqScannerAdd').onclick=()=>{troqCloseScannerSheet();troqOpenScanPage();};root.querySelector('#troqScannerBill').onclick=()=>{if(!troqInventory().length)return;troqCloseScannerSheet();troqOpenBillEditor();};return root;}
 function troqOpenScannerSheet(){const root=troqScannerUI();root.querySelector('#troqScannerBill').hidden=!troqInventory().length;root.classList.add('open');}
@@ -2925,7 +3058,7 @@ function troqScanPageUI(){
  // Keep cart and its minus/plus controls directly below the camera.
  page.querySelector('.troqScanViewport').after(page.querySelector('#troqScanCart'));
  page.querySelector('#troqScanBill').onclick=()=>{if(!troqInventory().length)return;troqScanBillMode=!troqScanBillMode;troqScanLastCode='';troqScanLastAt=0;troqRenderScanCart();page.querySelector('#troqScanPageStatus').textContent='';if(!troqScanStream)troqStartBarcodeScan(true);};
- page.querySelector('#troqScanCheckout').onclick=()=>{if(!troqScanCart.length)return;troqCloseBillManualSheet();troqStopBarcodeScan();page.classList.remove('open');const editor=troqField('troqBillEditor');if(editor.parentElement!==document.body)document.body.appendChild(editor);troqOpenBillEditor();editor.style.setProperty('z-index','2147483647','important');const rows=[...troqField('troqBillLines').children];for(let i=0;i<troqScanCart.length;i++){const item=troqScanCart[i];if(i>0)troqBillAddProduct();const row=troqField('troqBillLines').children[i];if(!row)continue;const name=row.querySelector('[data-product]');const qty=row.querySelector('[data-qty]'),price=row.querySelector('[data-price]');if(name)name.value=item.name;if(qty)qty.value=item.qty;if(price)price.value=item.price;}troqBillRecalculate();};
+ page.querySelector('#troqScanCheckout').onclick=()=>{if(!troqScanCart.length)return;troqCloseBillManualSheet();troqStopBarcodeScan();page.classList.remove('open');troqLiveFillBillEditor();};
  page.querySelector('#troqScanRetry').onclick=()=>troqStartBarcodeScan(true);
  page.querySelector('#troqScanManual').onclick=()=>{if(troqScanBillMode)troqOpenBillManualSheet();else troqOpenManualBarcode();};
  return page;
@@ -2941,20 +3074,20 @@ function troqBillManualSheetUI(){
 }
 function troqOpenBillManualSheet(){const sheet=troqBillManualSheetUI();if(sheet.parentElement!==document.body)document.body.appendChild(sheet);sheet.classList.add('open');sheet.querySelector('#troqBillManualInput').value='';troqRenderBillManualSuggestions();sheet.querySelector('#troqBillManualInput').focus();}
 function troqCloseBillManualSheet(){document.getElementById('troqBillManualSheet')?.classList.remove('open');}
-function troqRenderBillManualSuggestions(){const sheet=troqBillManualSheetUI(),q=sheet.querySelector('#troqBillManualInput').value.trim().toLowerCase(),out=sheet.querySelector('#troqBillManualResults');if(!q){out.innerHTML='<p class="troqManualEmpty">Type a barcode or product name.</p>';return;}const matches=troqInventory().filter(p=>String(p.barcode||'').toLowerCase().includes(q)||String(p.name||'').toLowerCase().includes(q)).slice(0,12);out.innerHTML=matches.length?matches.map(p=>'<button type="button" class="troqManualResult" data-manual-product="'+troqEsc(p.id)+'"><span><strong>'+troqEsc(p.name)+'</strong><small>'+troqEsc(p.barcode||'No barcode')+'</small></span><span>'+troqBillMoney(p.price)+'</span></button>').join(''):'<p class="troqManualEmpty">No saved product found.</p>';out.querySelectorAll('[data-manual-product]').forEach(btn=>btn.onclick=()=>{const p=troqInventory().find(item=>item.id===btn.dataset.manualProduct);if(!p)return;troqCloseBillManualSheet();if(p.barcode){troqScanLastAt=0;troqHandleScannedCode(p.barcode);}else{const line=troqScanCart.find(item=>item.id===p.id);if(line)line.qty++;else troqScanCart.push({id:p.id,name:p.name,qty:1,price:Number(p.price)||0});troqRenderScanCart();}});}
+function troqRenderBillManualSuggestions(){const sheet=troqBillManualSheetUI(),q=sheet.querySelector('#troqBillManualInput').value.trim().toLowerCase(),out=sheet.querySelector('#troqBillManualResults');if(!q){out.innerHTML='<p class="troqManualEmpty">Type a barcode or product name.</p>';return;}const matches=troqInventory().filter(p=>String(p.barcode||'').toLowerCase().includes(q)||String(p.name||'').toLowerCase().includes(q)).slice(0,12);out.innerHTML=matches.length?matches.map(p=>'<button type="button" class="troqManualResult" data-manual-product="'+troqEsc(p.id)+'"><span><strong>'+troqEsc(p.name)+'</strong><small>'+troqEsc(p.barcode||'No barcode')+'</small></span><span>'+troqBillMoney(p.price)+'</span></button>').join(''):'<p class="troqManualEmpty">No saved product found.</p>';out.querySelectorAll('[data-manual-product]').forEach(btn=>btn.onclick=()=>{const p=troqInventory().find(item=>item.id===btn.dataset.manualProduct);if(!p)return;troqCloseBillManualSheet();if(p.barcode){troqScanLastAt=0;troqHandleScannedCode(p.barcode);}else{const line=troqScanCart.find(item=>item.id===p.id);if(line)line.qty++;else troqScanCart.push({id:p.id,name:p.name,qty:1,price:Number(p.price)||0});troqRenderScanCart();void troqLiveSaveCart();}});}
 function troqRenderScanCart(){
  const page=troqScanPageUI(),bill=page.querySelector('#troqScanBill'),cart=page.querySelector('#troqScanCart'),checkout=page.querySelector('#troqScanCheckout');
  bill.hidden=!troqInventory().length;bill.classList.toggle('active',troqScanBillMode);bill.textContent=troqScanBillMode?'Add product':'Bill';
  cart.hidden=!troqScanBillMode;checkout.hidden=!troqScanBillMode||!troqScanCart.length;
  cart.innerHTML=troqScanBillMode?troqScanCart.map(p=>'<div class="troqScanCartLine"><span class="troqScanCartName">'+troqEsc(p.name)+'<small>'+troqBillMoney(p.price*p.qty)+'</small></span><button type="button" data-scan-minus="'+troqEsc(p.id)+'" aria-label="Decrease '+troqEsc(p.name)+'">−</button><strong>'+p.qty+'</strong><button type="button" data-scan-plus="'+troqEsc(p.id)+'" aria-label="Increase '+troqEsc(p.name)+'">+</button></div>').join(''):'';
- cart.querySelectorAll('[data-scan-minus]').forEach(btn=>btn.onclick=()=>{const i=troqScanCart.findIndex(p=>p.id===btn.dataset.scanMinus);if(i<0)return;if(troqScanCart[i].qty<=1)troqScanCart.splice(i,1);else troqScanCart[i].qty--;troqRenderScanCart();});
- cart.querySelectorAll('[data-scan-plus]').forEach(btn=>btn.onclick=()=>{const p=troqScanCart.find(p=>p.id===btn.dataset.scanPlus);if(p)p.qty++;troqRenderScanCart();});
+ cart.querySelectorAll('[data-scan-minus]').forEach(btn=>btn.onclick=()=>{const i=troqScanCart.findIndex(p=>p.id===btn.dataset.scanMinus);if(i<0)return;if(troqScanCart[i].qty<=1)troqScanCart.splice(i,1);else troqScanCart[i].qty--;troqRenderScanCart();void troqLiveSaveCart();});
+ cart.querySelectorAll('[data-scan-plus]').forEach(btn=>btn.onclick=()=>{const p=troqScanCart.find(p=>p.id===btn.dataset.scanPlus);if(p)p.qty++;troqRenderScanCart();void troqLiveSaveCart();});
 }
 function troqScanToast(message){
  let toast=document.getElementById('troqScanToast');if(!toast){toast=document.createElement('div');toast.id='troqScanToast';toast.setAttribute('role','status');document.body.appendChild(toast);}
  toast.textContent=message;toast.classList.add('show');clearTimeout(troqScanToast.timer);troqScanToast.timer=setTimeout(()=>toast.classList.remove('show'),1900);
 }
-function troqOpenScanPage(){const page=troqScanPageUI();page.classList.add('open');troqScanBillMode=false;troqScanCart=[];troqScanLastCode='';troqScanLastAt=0;troqRenderScanCart();page.querySelector('#troqScanPageStatus').textContent='';troqStartBarcodeScan(true);}
+function troqOpenScanPage(){const page=troqScanPageUI();page.classList.add('open');troqScanBillMode=false;troqScanLastCode='';troqScanLastAt=0;troqRenderScanCart();page.querySelector('#troqScanPageStatus').textContent='';void troqLivePullCart(true);troqStartBarcodeScan(true);}
 function troqCloseScanPage(){troqCloseBillManualSheet();troqStopBarcodeScan();document.getElementById('troqScanPage')?.classList.remove('open');troqCloseProductForm();}
 function troqHandleScannedCode(barcode){
  if(!barcode||troqScanBusy)return;
@@ -2967,7 +3100,7 @@ function troqHandleScannedCode(barcode){
   if(!product){troqScanToast('Barcode not saved');return;}
   const line=troqScanCart.find(p=>p.id===product.id);
   if(line)line.qty++;else troqScanCart.push({id:product.id,name:product.name,qty:1,price:Number(product.price)||0});
-  navigator.vibrate?.(65);troqRenderScanCart();troqScanToast(product.name+' × '+(line?line.qty:1));return;
+  navigator.vibrate?.(65);troqRenderScanCart();void troqLiveSaveCart();troqScanToast(product.name+' × '+(line?line.qty:1));return;
  }
  if(product){troqScanToast('Product already exists: '+product.name);return;}
  troqOpenScanDetails(barcode);
