@@ -4067,6 +4067,95 @@ function troqRenderItems(content){troqCloseScanPage();content.innerHTML='<h1>Ite
 })();
 </script>
 
+
+<script id="troqPcLiveWakeFix">
+(function(){
+  function isPc(){
+    return window.matchMedia('(min-width:901px) and (pointer:fine)').matches;
+  }
+
+  let ready=false;
+  let seenStamp='';
+  let seenSignature='';
+
+  function signature(){
+    try{
+      const cart=Array.isArray(troqMyData?.live_cart)?troqMyData.live_cart:[];
+      return JSON.stringify(cart.map(x=>[
+        String(x?.id||''),
+        String(x?.name||''),
+        Number(x?.qty)||0,
+        Number(x?.price)||0
+      ]));
+    }catch(_){ return '[]'; }
+  }
+
+  function currentStamp(){
+    try{return String(troqMyData?.live_cart_updated_at||'');}
+    catch(_){return '';}
+  }
+
+  function showInsights(){
+    document.body.classList.add('troq-pc-insights-first');
+    const main2=document.getElementById('mainUI2');
+    const dash=document.getElementById('troqDashboard');
+    if(main2)main2.classList.add('active');
+    if(dash)dash.hidden=false;
+    if(typeof troqShowDashboard==='function')troqShowDashboard('insights');
+  }
+
+  function showLive(){
+    document.body.classList.remove('troq-pc-insights-first');
+    if(typeof troqRenderLivePcPanel==='function')troqRenderLivePcPanel();
+  }
+
+  function init(){
+    if(!isPc())return;
+    /* Capture whatever old cart already exists after refresh/login.
+       Old cart must NOT wake the live screen. */
+    setTimeout(function(){
+      seenStamp=currentStamp();
+      seenSignature=signature();
+      showInsights();
+      ready=true;
+    },1500);
+
+    /* troqLivePullCart polls Supabase every 700ms but does not dispatch
+       troq-data-loaded. Watch the actual polled troqMyData instead. */
+    setInterval(function(){
+      if(!ready || !isPc())return;
+
+      const stamp=currentStamp();
+      const sig=signature();
+
+      if(stamp!==seenStamp || sig!==seenSignature){
+        seenStamp=stamp;
+        seenSignature=sig;
+
+        let hasItems=false;
+        try{hasItems=Array.isArray(troqMyData?.live_cart) && troqMyData.live_cart.length>0;}catch(_){}
+
+        if(hasItems)showLive();
+      }
+    },350);
+  }
+
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
+  else init();
+
+  /* ESC -> Insights, while polling continues in background.
+     Next phone scan changes live_cart stamp and wakes Live Products again. */
+  document.addEventListener('keydown',function(e){
+    if(!isPc() || (e.key!=='Escape' && e.key!=='Esc'))return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    seenStamp=currentStamp();
+    seenSignature=signature();
+    showInsights();
+  },true);
+})();
+</script>
+
 </body>
 </html>
 <!-- TROQ receipt product column fix: product name aligns below PRODUCT -->
