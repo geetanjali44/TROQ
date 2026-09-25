@@ -4156,6 +4156,185 @@ function troqRenderItems(content){troqCloseScanPage();content.innerHTML='<h1>Ite
 })();
 </script>
 
+
+<style id="troqPcLivePaymentUi">
+@media (min-width:901px) and (pointer:fine){
+  body.troq-pc-counter-safe:not(.troq-pc-insights-first) #troqLivePcPanel{
+    display:grid!important;
+    grid-template-columns:minmax(0,1.6fr) minmax(330px,.8fr)!important;
+    grid-template-rows:auto 1fr!important;
+    gap:18px!important;
+    top:96px!important;
+    left:28px!important;
+    right:28px!important;
+    bottom:28px!important;
+    height:auto!important;
+    width:auto!important;
+    max-width:none!important;
+    padding:0!important;
+    background:transparent!important;
+    border:0!important;
+    box-shadow:none!important;
+    overflow:visible!important;
+  }
+
+  body.troq-pc-counter-safe:not(.troq-pc-insights-first) #troqLivePcPanel .troqLivePcHead{
+    grid-column:1 / -1!important;
+    grid-row:1!important;
+    margin:0!important;
+    padding:16px 20px!important;
+    background:#fff!important;
+    border:1px solid #ececec!important;
+    border-radius:16px!important;
+  }
+
+  body.troq-pc-counter-safe:not(.troq-pc-insights-first) #troqLivePcPanel .troqLivePcItems{
+    grid-column:1!important;
+    grid-row:2!important;
+    display:block!important;
+    min-height:0!important;
+    max-height:calc(100vh - 190px)!important;
+    overflow-y:auto!important;
+    margin:0!important;
+    padding:5px 20px!important;
+    background:#fff!important;
+    border:1px solid #ececec!important;
+    border-radius:16px!important;
+  }
+
+  body.troq-pc-counter-safe:not(.troq-pc-insights-first) #troqLivePcPanel .troqLivePcRow{
+    display:flex!important;
+    width:100%!important;
+    min-height:68px!important;
+    margin:0!important;
+    padding:13px 0!important;
+    border-bottom:1px solid #f0f0f0!important;
+  }
+
+  body.troq-pc-counter-safe:not(.troq-pc-insights-first) #troqLivePcPanel .troqLivePcFoot{
+    grid-column:2!important;
+    grid-row:2!important;
+    display:flex!important;
+    flex-direction:column!important;
+    align-self:start!important;
+    margin:0!important;
+    padding:18px!important;
+    background:#fff!important;
+    border:1px solid #ececec!important;
+    border-radius:16px!important;
+  }
+
+  #troqPcPaymentChoices{
+    display:flex;
+    flex-direction:column;
+    gap:9px;
+    width:100%;
+    margin:4px 0 17px;
+  }
+  .troqPcPaymentTitle{
+    margin:0 0 9px;
+    font:600 14px 'Outfit',sans-serif;
+    color:#555;
+  }
+  .troqPcPaymentChoice{
+    display:flex;
+    align-items:center;
+    width:100%;
+    height:48px;
+    padding:0 13px;
+    gap:11px;
+    border:1px solid #e8e8e8;
+    border-radius:11px;
+    background:#fff;
+    color:#242424;
+    font:600 14px 'Outfit',sans-serif;
+    cursor:pointer;
+    text-align:left;
+  }
+  .troqPcPaymentChoice:hover{background:#fafafa;border-color:#d8d8d8}
+  .troqPcPaymentChoice.selected{border-color:#ff2380;background:#fff5f9}
+  .troqPcPaymentChoice img{
+    width:28px;height:28px;object-fit:contain;border-radius:7px;flex:none;
+  }
+
+  body.troq-pc-counter-safe:not(.troq-pc-insights-first) #troqLivePcPanel .troqLivePcTotal{
+    order:2!important;
+    margin:0 0 12px!important;
+    padding:14px 0!important;
+    border-top:1px solid #eee!important;
+    border-bottom:1px solid #eee!important;
+  }
+  body.troq-pc-counter-safe:not(.troq-pc-insights-first) #troqLivePcPanel #troqLivePcCreate,
+  body.troq-pc-counter-safe:not(.troq-pc-insights-first) #troqLivePcPanel #troqLivePcPrinter,
+  body.troq-pc-counter-safe:not(.troq-pc-insights-first) #troqLivePcPanel #troqLivePcClear{
+    position:static!important;
+    width:100%!important;
+    height:46px!important;
+    min-height:46px!important;
+    margin:7px 0 0!important;
+    border-radius:11px!important;
+  }
+}
+</style>
+
+<script id="troqPcLivePaymentUiLogic">
+(function(){
+  function isPc(){
+    return window.matchMedia('(min-width:901px) and (pointer:fine)').matches;
+  }
+
+  function dummyLogo(text,bg,fg){
+    return 'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">'+
+      '<rect width="64" height="64" rx="14" fill="'+bg+'"/>'+
+      '<text x="32" y="40" text-anchor="middle" font-family="Arial" font-size="24" font-weight="700" fill="'+fg+'">'+text+'</text>'+
+      '</svg>'
+    );
+  }
+
+  const methods=[
+    {id:'phonepe',name:'PhonePe',img:dummyLogo('P','#5f259f','#ffffff')},
+    {id:'gpay',name:'Google Pay',img:dummyLogo('G','#ffffff','#4285f4')},
+    {id:'paytm',name:'Paytm',img:dummyLogo('P','#e9f8ff','#00a8e0')}
+  ];
+
+  function mount(){
+    if(!isPc())return;
+    const foot=document.querySelector('#troqLivePcPanel .troqLivePcFoot');
+    if(!foot || foot.querySelector('#troqPcPaymentChoices'))return;
+
+    const wrap=document.createElement('div');
+    wrap.id='troqPcPaymentChoices';
+    wrap.innerHTML='<div class="troqPcPaymentTitle">Payment method</div>'+
+      methods.map(m=>'<button type="button" class="troqPcPaymentChoice" data-pay="'+m.id+'">'+
+        '<img src="'+m.img+'" alt=""><span>'+m.name+'</span></button>').join('');
+
+    foot.insertBefore(wrap,foot.firstChild);
+
+    wrap.querySelectorAll('.troqPcPaymentChoice').forEach(btn=>{
+      btn.onclick=()=>{
+        wrap.querySelectorAll('.troqPcPaymentChoice').forEach(x=>x.classList.remove('selected'));
+        btn.classList.add('selected');
+        wrap.dataset.selected=btn.dataset.pay;
+      };
+    });
+  }
+
+  const observer=new MutationObserver(()=>mount());
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',()=>{
+      mount();
+      observer.observe(document.body,{childList:true,subtree:true});
+    });
+  }else{
+    mount();
+    observer.observe(document.body,{childList:true,subtree:true});
+  }
+  window.addEventListener('troq-data-loaded',()=>setTimeout(mount,30));
+  setInterval(mount,800);
+})();
+</script>
+
 </body>
 </html>
 <!-- TROQ receipt product column fix: product name aligns below PRODUCT -->
