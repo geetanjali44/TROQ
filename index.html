@@ -3506,6 +3506,78 @@ function troqRenderItems(content){troqCloseScanPage();content.innerHTML='<h1>Ite
 })();
 </script>
 
+
+<style id="troqPc5050Layout">
+@media (min-width:901px) and (pointer:fine){
+  body.troq-pc-counter-safe #troqLivePcPanel{
+    position:fixed!important;
+    top:105px!important;
+    left:24px!important;
+    right:24px!important;
+    width:auto!important;
+    max-width:none!important;
+    height:calc(100vh - 130px)!important;
+    margin:0!important;
+    padding:0!important;
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) minmax(340px,42%)!important;
+    grid-template-rows:auto 1fr!important;
+    column-gap:28px!important;
+    background:transparent!important;
+    border:0!important;
+    box-shadow:none!important;
+    border-radius:0!important;
+    overflow:hidden!important;
+  }
+
+  body.troq-pc-counter-safe #troqLivePcPanel .troqLivePcHead{
+    grid-column:1 / -1!important;
+    background:#fff!important;
+    border:1px solid #ececec!important;
+    border-radius:18px!important;
+    padding:18px 22px!important;
+    margin-bottom:18px!important;
+  }
+
+  body.troq-pc-counter-safe #troqLivePcPanel .troqLivePcItems{
+    grid-column:1!important;
+    grid-row:2!important;
+    background:#fff!important;
+    border:1px solid #ececec!important;
+    border-radius:20px!important;
+    padding:12px 20px!important;
+    overflow:auto!important;
+    min-height:0!important;
+  }
+
+  body.troq-pc-counter-safe #troqLivePcPanel .troqLivePcFoot{
+    grid-column:2!important;
+    grid-row:2!important;
+    align-self:start!important;
+    background:#fff!important;
+    border:1px solid #ececec!important;
+    border-radius:20px!important;
+    padding:22px!important;
+    margin:0!important;
+  }
+
+  body.troq-pc-counter-safe #troqLivePcPanel .troqLivePcRow{
+    padding:18px 0!important;
+  }
+
+  body.troq-pc-counter-safe #troqLivePcPanel .troqLivePcCreate,
+  body.troq-pc-counter-safe #troqLivePcPanel .troqLivePcClear{
+    min-height:58px!important;
+    font-size:16px!important;
+  }
+
+  /* Printer connection belongs to right-side action area; remove floating duplicate. */
+  body.troq-pc-counter-safe #troqPcPrinterDock{
+    display:none!important;
+  }
+}
+</style>
+
 </body>
 </html>
 <!-- TROQ receipt product column fix: product name aligns below PRODUCT -->
