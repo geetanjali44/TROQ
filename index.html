@@ -3791,6 +3791,119 @@ function troqRenderItems(content){troqCloseScanPage();content.innerHTML='<h1>Ite
 }
 </style>
 
+
+<style id="troqPcBottomActionsFinal">
+@media (min-width:901px) and (pointer:fine){
+  /* All three PC actions together at bottom-right, same size */
+  body.troq-pc-counter-safe #troqLivePcCreate,
+  body.troq-pc-counter-safe .troqLivePcCreate,
+  body.troq-pc-counter-safe #troqLivePcPrinter,
+  body.troq-pc-counter-safe .troqLivePcPrinter,
+  body.troq-pc-counter-safe #troqLivePcClear,
+  body.troq-pc-counter-safe .troqLivePcClear{
+    position:fixed!important;
+    bottom:24px!important;
+    top:auto!important;
+    width:150px!important;
+    min-width:150px!important;
+    max-width:150px!important;
+    height:48px!important;
+    min-height:48px!important;
+    margin:0!important;
+    padding:0 12px!important;
+    border-radius:12px!important;
+    font:600 14px 'Outfit',sans-serif!important;
+    z-index:5000!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    white-space:nowrap!important;
+  }
+
+  body.troq-pc-counter-safe #troqLivePcCreate,
+  body.troq-pc-counter-safe .troqLivePcCreate{
+    right:24px!important;
+    left:auto!important;
+    background:#ff2380!important;
+    color:#fff!important;
+    border:0!important;
+  }
+
+  body.troq-pc-counter-safe #troqLivePcPrinter,
+  body.troq-pc-counter-safe .troqLivePcPrinter{
+    right:186px!important;
+    left:auto!important;
+    background:#fff!important;
+    color:#ff2380!important;
+    border:1px solid #ffd0e3!important;
+  }
+
+  body.troq-pc-counter-safe #troqLivePcClear,
+  body.troq-pc-counter-safe .troqLivePcClear{
+    right:348px!important;
+    left:auto!important;
+    background:#f3f3f3!important;
+    color:#333!important;
+    border:0!important;
+  }
+
+  /* Connected printer = disabled-looking button */
+  body.troq-pc-counter-safe #troqLivePcPrinter:disabled,
+  body.troq-pc-counter-safe .troqLivePcPrinter:disabled,
+  body.troq-pc-counter-safe #troqLivePcPrinter.troq-printer-connected,
+  body.troq-pc-counter-safe .troqLivePcPrinter.troq-printer-connected{
+    background:#ededed!important;
+    border-color:#ededed!important;
+    color:#999!important;
+    cursor:not-allowed!important;
+    opacity:1!important;
+    pointer-events:none!important;
+  }
+}
+</style>
+
+<script id="troqPcPrinterDisableAfterConnect">
+(function(){
+  function getPrinterButton(){
+    return document.getElementById('troqLivePcPrinter') ||
+           document.querySelector('.troqLivePcPrinter');
+  }
+
+  function markConnected(){
+    const btn=getPrinterButton();
+    if(!btn)return;
+    btn.disabled=true;
+    btn.classList.add('troq-printer-connected');
+    btn.textContent='Printer connected';
+  }
+
+  /* Watch existing printer UI/state. If the existing connection flow changes
+     the button/status to connected, lock the button immediately. */
+  const observer=new MutationObserver(function(){
+    const btn=getPrinterButton();
+    if(!btn)return;
+
+    const txt=(btn.textContent||'').toLowerCase();
+    const page=(document.body.innerText||'').toLowerCase();
+
+    if(
+      txt.includes('connected') ||
+      page.includes('counter printer connected') ||
+      page.includes('printer connected')
+    ){
+      markConnected();
+    }
+  });
+
+  function start(){
+    observer.observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true});
+  }
+
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);
+  else start();
+})();
+</script>
+
 </body>
 </html>
 <!-- TROQ receipt product column fix: product name aligns below PRODUCT -->
