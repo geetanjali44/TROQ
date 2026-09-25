@@ -1314,8 +1314,11 @@ html body > #troqBillEditor[hidden]{display:none!important}
 .troqMobileReceiptRow{display:grid;grid-template-columns:minmax(0,1fr) 42px 70px;gap:6px;font-size:13px;padding:4px 0}
 .troqMobileReceiptRow span:nth-child(2),.troqMobileReceiptRow span:nth-child(3){text-align:right}
 .troqMobileReceiptTotal{display:flex;justify-content:space-between;font-size:17px;font-weight:800;padding-top:4px}
-.troqMobileReceiptDone{width:calc(100% - 28px);margin:4px 14px 16px;height:48px;border:0;border-radius:13px;background:#ff2380;color:#fff;font:600 15px 'Outfit',sans-serif}
-@media(min-width:768px){.troqMobileReceiptOverlay{display:none!important}}
+.troqMobileReceiptActions{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:4px 14px 16px}
+.troqMobileReceiptPrint,.troqMobileReceiptDone{width:100%;height:48px;border:0;border-radius:13px;font:600 15px 'Outfit',sans-serif;cursor:pointer}
+.troqMobileReceiptPrint{background:#ff2380;color:#fff}
+.troqMobileReceiptDone{margin:0;background:#f2f2f2;color:#222}
+
 </style>
 
 </head>
@@ -3024,12 +3027,19 @@ async function troqLivePullCart(force=false){
    troqMyData={...remote};
    if(document.getElementById('troqScanPage'))troqRenderScanCart();
    troqRenderLivePcPanel();
-   troqCheckMobileReceipt();
+  }else{
+   // Even when cart did not change, keep receipt/bill state fresh.
+   troqMyData={...troqMyData,...remote};
   }
+  troqCheckMobileReceipt();
  }catch(e){console.warn('Live cart refresh failed',e);}
 }
 
-function troqIsMobileBillingDevice(){return window.matchMedia('(max-width: 767px)').matches;}
+function troqIsMobileBillingDevice(){
+ return window.matchMedia('(max-width: 900px)').matches ||
+        window.matchMedia('(pointer: coarse)').matches ||
+        /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+}
 
 function troqMobileReceiptUI(){
  let root=document.getElementById('troqMobileReceiptOverlay');
@@ -3037,10 +3047,20 @@ function troqMobileReceiptUI(){
  root=document.createElement('section');
  root.id='troqMobileReceiptOverlay';
  root.className='troqMobileReceiptOverlay';
- root.innerHTML='<div class="troqMobileReceiptCard"><div class="troqMobileReceiptTop"><h2>Bill receipt</h2><button type="button" id="troqMobileReceiptClose" aria-label="Close">✕</button></div><div id="troqMobileReceiptBody"></div><button type="button" class="troqMobileReceiptDone" id="troqMobileReceiptDone">Done</button></div>';
+ root.innerHTML='<div class="troqMobileReceiptCard"><div class="troqMobileReceiptTop"><h2>Bill receipt</h2><button type="button" id="troqMobileReceiptClose" aria-label="Close">✕</button></div><div id="troqMobileReceiptBody"></div><div class="troqMobileReceiptActions"><button type="button" class="troqMobileReceiptPrint" id="troqMobileReceiptPrint">Print</button><button type="button" class="troqMobileReceiptDone" id="troqMobileReceiptDone">Done</button></div></div>';
  document.body.appendChild(root);
  root.querySelector('#troqMobileReceiptClose').onclick=()=>root.classList.remove('open');
  root.querySelector('#troqMobileReceiptDone').onclick=()=>root.classList.remove('open');
+ root.querySelector('#troqMobileReceiptPrint').onclick=()=>{
+   const latest=troqLatestSyncedReceipt();
+   if(!latest?.bill)return;
+   const w=window.open('','_blank','width=420,height=700');
+   if(!w){alert('Please allow popups to print the receipt.');return;}
+   w.document.open();
+   w.document.write(troqBillReceiptHtml(latest.bill));
+   w.document.close();
+   troqPrintWindow(w);
+ };
  return root;
 }
 function troqRenderMobileReceipt(bill){
