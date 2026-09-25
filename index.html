@@ -1282,6 +1282,42 @@ html body > #troqBillEditor[hidden]{display:none!important}
 @media(max-width:767px){.troqLivePcPanel{display:none!important}}
 </style>
 
+
+<style id="troqMobileReceiptSyncStyles">
+.troqMobileReceiptOverlay{
+ position:fixed;inset:0;z-index:2147483646;background:#f7f7f8;display:none;
+ font-family:'Outfit',sans-serif;overflow:auto;padding:18px 14px 40px
+}
+.troqMobileReceiptOverlay.open{display:block}
+.troqMobileReceiptCard{
+ width:min(420px,100%);margin:0 auto;background:#fff;border-radius:20px;
+ box-shadow:0 10px 35px rgba(0,0,0,.08);overflow:hidden
+}
+.troqMobileReceiptTop{
+ display:flex;align-items:center;justify-content:space-between;padding:17px 18px;
+ border-bottom:1px solid #eee
+}
+.troqMobileReceiptTop h2{margin:0;font-size:20px}
+.troqMobileReceiptTop button{border:0;background:#f3f3f3;border-radius:50%;width:36px;height:36px;font-size:18px}
+.troqMobileReceiptSuccess{text-align:center;padding:20px 18px 8px}
+.troqMobileReceiptSuccess .tick{
+ width:52px;height:52px;border-radius:50%;display:grid;place-items:center;margin:0 auto 10px;
+ background:#eaf9ef;color:#159447;font-size:27px;font-weight:800
+}
+.troqMobileReceiptSuccess strong{display:block;font-size:18px}
+.troqMobileReceiptSuccess small{display:block;color:#777;margin-top:5px}
+.troqMobileReceiptPaper{margin:14px;background:#fff;border:1px dashed #bbb;padding:18px 15px;color:#222}
+.troqMobileReceiptPaper .biz{text-align:center;margin-bottom:12px}
+.troqMobileReceiptPaper .biz h3{margin:0 0 3px;font-size:20px}
+.troqMobileReceiptPaper .biz p{margin:2px 0;font-size:12px;color:#555}
+.troqMobileReceiptRule{border-top:1px dashed #aaa;margin:10px 0}
+.troqMobileReceiptRow{display:grid;grid-template-columns:minmax(0,1fr) 42px 70px;gap:6px;font-size:13px;padding:4px 0}
+.troqMobileReceiptRow span:nth-child(2),.troqMobileReceiptRow span:nth-child(3){text-align:right}
+.troqMobileReceiptTotal{display:flex;justify-content:space-between;font-size:17px;font-weight:800;padding-top:4px}
+.troqMobileReceiptDone{width:calc(100% - 28px);margin:4px 14px 16px;height:48px;border:0;border-radius:13px;background:#ff2380;color:#fff;font:600 15px 'Outfit',sans-serif}
+@media(min-width:768px){.troqMobileReceiptOverlay{display:none!important}}
+</style>
+
 </head>
 
 <body>
@@ -2243,8 +2279,12 @@ troqField('troqBillPreview').onclick=async()=>{
  troqBillPrinting=true;btn.disabled=true;btn.textContent='Saving…';
  try{
    const bills=Array.isArray(troqMyData.bills)?troqMyData.bills:[];
-   await troqSaveMyData({...troqMyData,bills:[...bills,bill]});
-   await troqLiveClearCart();
+   const receiptId=String(bill.id||crypto.randomUUID?.()||Date.now());
+   const finishedData={...troqMyData,bills:[...bills,bill],live_cart:[],live_cart_updated_at:new Date().toISOString(),live_last_receipt:{id:receiptId,bill,created_at:new Date().toISOString()}};
+   await troqSaveMyData(finishedData);
+   troqScanCart=[];
+   troqLiveLastStamp=String(finishedData.live_cart_updated_at||'');
+   troqRenderLivePcPanel();
    const html=troqBillReceiptHtml(bill);
    printWindow.document.open();printWindow.document.write(html);printWindow.document.close();
    troqPrintWindow(printWindow);
@@ -2984,9 +3024,55 @@ async function troqLivePullCart(force=false){
    troqMyData={...remote};
    if(document.getElementById('troqScanPage'))troqRenderScanCart();
    troqRenderLivePcPanel();
+   troqCheckMobileReceipt();
   }
  }catch(e){console.warn('Live cart refresh failed',e);}
 }
+
+function troqIsMobileBillingDevice(){return window.matchMedia('(max-width: 767px)').matches;}
+
+function troqMobileReceiptUI(){
+ let root=document.getElementById('troqMobileReceiptOverlay');
+ if(root)return root;
+ root=document.createElement('section');
+ root.id='troqMobileReceiptOverlay';
+ root.className='troqMobileReceiptOverlay';
+ root.innerHTML='<div class="troqMobileReceiptCard"><div class="troqMobileReceiptTop"><h2>Bill receipt</h2><button type="button" id="troqMobileReceiptClose" aria-label="Close">✕</button></div><div id="troqMobileReceiptBody"></div><button type="button" class="troqMobileReceiptDone" id="troqMobileReceiptDone">Done</button></div>';
+ document.body.appendChild(root);
+ root.querySelector('#troqMobileReceiptClose').onclick=()=>root.classList.remove('open');
+ root.querySelector('#troqMobileReceiptDone').onclick=()=>root.classList.remove('open');
+ return root;
+}
+function troqRenderMobileReceipt(bill){
+ if(!troqIsMobileBillingDevice()||!bill)return;
+ const root=troqMobileReceiptUI(),body=root.querySelector('#troqMobileReceiptBody');
+ const b=bill.business||{},items=Array.isArray(bill.items)?bill.items:[];
+ const when=bill.created_at?new Date(bill.created_at).toLocaleString('en-IN'):new Date().toLocaleString('en-IN');
+ body.innerHTML='<div class="troqMobileReceiptSuccess"><div class="tick">✓</div><strong>Bill generated</strong><small>'+troqEsc(when)+'</small></div>'+
+ '<div class="troqMobileReceiptPaper"><div class="biz"><h3>'+troqEsc(b.name||'TROQ')+'</h3>'+
+ (b.subtext?'<p>'+troqEsc(b.subtext)+'</p>':'')+(b.mobile?'<p>'+troqEsc(b.mobile)+'</p>':'')+(b.address?'<p>'+troqEsc(b.address)+'</p>':'')+'</div>'+
+ '<div class="troqMobileReceiptRule"></div>'+
+ items.map(x=>'<div class="troqMobileReceiptRow"><span>'+troqEsc(x.name||'Product')+'</span><span>×'+(Number(x.qty)||0)+'</span><span>'+troqBillMoney(Number(x.amount)||((Number(x.qty)||0)*(Number(x.price)||0)))+'</span></div>').join('')+
+ '<div class="troqMobileReceiptRule"></div>'+
+ (Number(bill.subtotal)>=0?'<div class="troqMobileReceiptRow"><span>Subtotal</span><span></span><span>'+troqBillMoney(Number(bill.subtotal)||0)+'</span></div>':'')+
+ (Number(bill.gst_amount)>0?'<div class="troqMobileReceiptRow"><span>GST</span><span></span><span>'+troqBillMoney(Number(bill.gst_amount)||0)+'</span></div>':'')+
+ '<div class="troqMobileReceiptTotal"><span>Total</span><span>'+troqBillMoney(Number(bill.total_amount)||0)+'</span></div></div>';
+ root.classList.add('open');
+}
+function troqLatestSyncedReceipt(data=troqMyData){
+ const r=data?.live_last_receipt;
+ return r&&r.bill&&r.id?{id:String(r.id),bill:r.bill}:null;
+}
+function troqCheckMobileReceipt(){
+ if(!troqIsMobileBillingDevice())return;
+ const latest=troqLatestSyncedReceipt();
+ if(!latest)return;
+ const seen=localStorage.getItem('troqLastReceiptSeen');
+ if(seen===latest.id)return;
+ localStorage.setItem('troqLastReceiptSeen',latest.id);
+ troqRenderMobileReceipt(latest.bill);
+}
+
 async function troqLiveClearCart(){
  troqScanCart=[];
  await troqLiveSaveCart();
@@ -3041,7 +3127,7 @@ function troqStartLivePolling(){
  void troqLivePullCart(true);
  troqLivePollTimer=setInterval(()=>void troqLivePullCart(false),1200);
 }
-window.addEventListener('troq-data-loaded',()=>troqStartLivePolling());
+window.addEventListener('troq-data-loaded',()=>{troqStartLivePolling();troqCheckMobileReceipt();});
 window.addEventListener('focus',()=>{if(localStorage.getItem('troqUserToken'))void troqLivePullCart(true);});
 
 function troqInventory(){return Array.isArray(troqMyData.products)?troqMyData.products:[];}
@@ -3078,7 +3164,7 @@ function troqRenderBillManualSuggestions(){const sheet=troqBillManualSheetUI(),q
 function troqRenderScanCart(){
  const page=troqScanPageUI(),bill=page.querySelector('#troqScanBill'),cart=page.querySelector('#troqScanCart'),checkout=page.querySelector('#troqScanCheckout');
  bill.hidden=!troqInventory().length;bill.classList.toggle('active',troqScanBillMode);bill.textContent=troqScanBillMode?'Add product':'Bill';
- cart.hidden=!troqScanBillMode;checkout.hidden=!troqScanBillMode||!troqScanCart.length;
+ cart.hidden=!troqScanBillMode;checkout.hidden=troqIsMobileBillingDevice()||!troqScanBillMode||!troqScanCart.length;
  cart.innerHTML=troqScanBillMode?troqScanCart.map(p=>'<div class="troqScanCartLine"><span class="troqScanCartName">'+troqEsc(p.name)+'<small>'+troqBillMoney(p.price*p.qty)+'</small></span><button type="button" data-scan-minus="'+troqEsc(p.id)+'" aria-label="Decrease '+troqEsc(p.name)+'">−</button><strong>'+p.qty+'</strong><button type="button" data-scan-plus="'+troqEsc(p.id)+'" aria-label="Increase '+troqEsc(p.name)+'">+</button></div>').join(''):'';
  cart.querySelectorAll('[data-scan-minus]').forEach(btn=>btn.onclick=()=>{const i=troqScanCart.findIndex(p=>p.id===btn.dataset.scanMinus);if(i<0)return;if(troqScanCart[i].qty<=1)troqScanCart.splice(i,1);else troqScanCart[i].qty--;troqRenderScanCart();void troqLiveSaveCart();});
  cart.querySelectorAll('[data-scan-plus]').forEach(btn=>btn.onclick=()=>{const p=troqScanCart.find(p=>p.id===btn.dataset.scanPlus);if(p)p.qty++;troqRenderScanCart();void troqLiveSaveCart();});
