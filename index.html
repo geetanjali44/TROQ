@@ -3578,6 +3578,219 @@ function troqRenderItems(content){troqCloseScanPage();content.innerHTML='<h1>Ite
 }
 </style>
 
+
+<style id="troqPcCompactBillPattern">
+@media (min-width:901px) and (pointer:fine){
+  body.troq-pc-counter-safe #troqLivePcPanel{
+    top:105px!important;
+    left:24px!important;
+    right:24px!important;
+    width:auto!important;
+    height:auto!important;
+    max-height:calc(100vh - 130px)!important;
+    display:block!important;
+    padding:0!important;
+    overflow:visible!important;
+    background:#fff!important;
+    border:1px solid #e9e9e9!important;
+    border-radius:20px!important;
+    box-shadow:0 8px 30px rgba(0,0,0,.05)!important;
+  }
+
+  body.troq-pc-counter-safe #troqLivePcPanel .troqLivePcHead{
+    display:flex!important;
+    margin:0!important;
+    padding:18px 22px!important;
+    border:0!important;
+    border-bottom:1px solid #ededed!important;
+    border-radius:20px 20px 0 0!important;
+    background:#fff!important;
+  }
+
+  body.troq-pc-counter-safe #troqLivePcPanel .troqLivePcItems{
+    display:block!important;
+    margin:0!important;
+    padding:4px 22px!important;
+    max-height:380px!important;
+    overflow-y:auto!important;
+    background:#fff!important;
+    border:0!important;
+    border-radius:0!important;
+  }
+
+  body.troq-pc-counter-safe #troqLivePcPanel .troqLivePcRow{
+    min-height:72px!important;
+    padding:13px 0!important;
+    margin:0!important;
+    border-bottom:1px solid #f0f0f0!important;
+  }
+
+  body.troq-pc-counter-safe #troqLivePcPanel .troqLivePcFoot{
+    display:grid!important;
+    grid-template-columns:1fr 1fr!important;
+    gap:12px!important;
+    align-items:center!important;
+    margin:0!important;
+    padding:18px 22px 22px!important;
+    background:#fff!important;
+    border:0!important;
+    border-radius:0 0 20px 20px!important;
+  }
+
+  body.troq-pc-counter-safe #troqLivePcPanel .troqLivePcTotal{
+    grid-column:1 / -1!important;
+    margin:0 0 4px!important;
+    padding:0 0 16px!important;
+    border-bottom:1px solid #ededed!important;
+  }
+
+  body.troq-pc-counter-safe #troqLivePcPanel .troqLivePcCreate,
+  body.troq-pc-counter-safe #troqLivePcPanel .troqLivePcClear{
+    width:100%!important;
+    min-height:52px!important;
+    height:52px!important;
+    margin:0!important;
+    border-radius:13px!important;
+  }
+
+  body.troq-pc-counter-safe #troqLivePcPanel #troqLivePcCreate{
+    grid-column:1!important;
+  }
+  body.troq-pc-counter-safe #troqLivePcPanel #troqLivePcPrinter{
+    grid-column:2!important;
+  }
+  body.troq-pc-counter-safe #troqLivePcPanel #troqLivePcClear{
+    grid-column:1 / -1!important;
+  }
+
+  body.troq-pc-counter-safe #troqPcPrinterDock{
+    display:none!important;
+  }
+}
+</style>
+
+
+<style id="troqPcTrueTwoPortions">
+@media (min-width:901px) and (pointer:fine){
+  body.troq-pc-counter-safe #troqLivePcPanel{
+    top:105px!important;
+    left:24px!important;
+    right:24px!important;
+    width:auto!important;
+    max-width:none!important;
+    height:auto!important;
+    display:grid!important;
+    grid-template-columns:minmax(0,60%) minmax(320px,40%)!important;
+    grid-template-rows:auto auto!important;
+    column-gap:20px!important;
+    row-gap:0!important;
+    padding:0!important;
+    background:transparent!important;
+    border:0!important;
+    box-shadow:none!important;
+    overflow:visible!important;
+  }
+
+  /* Header across both portions */
+  body.troq-pc-counter-safe #troqLivePcPanel .troqLivePcHead{
+    grid-column:1 / -1!important;
+    grid-row:1!important;
+    margin:0 0 16px!important;
+    padding:17px 20px!important;
+    background:#fff!important;
+    border:1px solid #e8e8e8!important;
+    border-radius:16px!important;
+  }
+
+  /* LEFT = products */
+  body.troq-pc-counter-safe #troqLivePcPanel .troqLivePcItems{
+    grid-column:1!important;
+    grid-row:2!important;
+    margin:0!important;
+    padding:4px 20px!important;
+    min-height:180px!important;
+    max-height:calc(100vh - 220px)!important;
+    overflow-y:auto!important;
+    background:#fff!important;
+    border:1px solid #e8e8e8!important;
+    border-radius:16px!important;
+  }
+
+  body.troq-pc-counter-safe #troqLivePcPanel .troqLivePcRow{
+    min-height:70px!important;
+    padding:12px 0!important;
+    margin:0!important;
+    border-bottom:1px solid #f0f0f0!important;
+  }
+
+  /* RIGHT = total/actions */
+  body.troq-pc-counter-safe #troqLivePcPanel .troqLivePcFoot{
+    grid-column:2!important;
+    grid-row:2!important;
+    display:block!important;
+    align-self:start!important;
+    margin:0!important;
+    padding:20px!important;
+    background:#fff!important;
+    border:1px solid #e8e8e8!important;
+    border-radius:16px!important;
+  }
+
+  body.troq-pc-counter-safe #troqLivePcPanel .troqLivePcTotal{
+    margin:0 0 16px!important;
+    padding:0 0 16px!important;
+    border-bottom:1px solid #ededed!important;
+  }
+
+  body.troq-pc-counter-safe #troqLivePcPanel .troqLivePcCreate,
+  body.troq-pc-counter-safe #troqLivePcPanel .troqLivePcClear{
+    display:block!important;
+    width:100%!important;
+    height:54px!important;
+    min-height:54px!important;
+    margin:10px 0 0!important;
+    border-radius:13px!important;
+  }
+
+  body.troq-pc-counter-safe #troqPcPrinterDock{
+    display:none!important;
+  }
+}
+</style>
+
+
+<style id="troqPcCreateBillBottomRight">
+@media (min-width:901px) and (pointer:fine){
+  /* Small Create Bill button at PC bottom-right corner */
+  body.troq-pc-counter-safe #troqLivePcCreate,
+  body.troq-pc-counter-safe .troqLivePcCreate{
+    position:fixed!important;
+    right:24px!important;
+    bottom:24px!important;
+    left:auto!important;
+    top:auto!important;
+    z-index:5000!important;
+
+    width:auto!important;
+    min-width:130px!important;
+    height:44px!important;
+    min-height:44px!important;
+
+    margin:0!important;
+    padding:0 22px!important;
+
+    border:0!important;
+    border-radius:12px!important;
+    background:#ff2380!important;
+    color:#fff!important;
+
+    font:600 14px 'Outfit',sans-serif!important;
+    box-shadow:0 8px 24px rgba(255,35,128,.22)!important;
+    cursor:pointer!important;
+  }
+}
+</style>
+
 </body>
 </html>
 <!-- TROQ receipt product column fix: product name aligns below PRODUCT -->
