@@ -3945,63 +3945,124 @@ function troqRenderItems(content){troqCloseScanPage();content.innerHTML='<h1>Ite
 </style>
 
 
-<style id="troqPcEscDashboardFixStyle">
+<style id="troqPcInsightsFirstStyle">
 @media (min-width:901px) and (pointer:fine){
-  body.troq-pc-counter-safe.troq-pc-dashboard-view #troqLivePcPanel{
+  /* PC default after login/refresh = full-width existing Insights dashboard */
+  body.troq-pc-counter-safe.troq-pc-insights-first #troqLivePcPanel,
+  body.troq-pc-counter-safe.troq-pc-insights-first #troqPcPrinterDock{
     display:none!important;
   }
-  body.troq-pc-counter-safe.troq-pc-dashboard-view #troqPcPrinterDock{
-    display:none!important;
-  }
-  body.troq-pc-counter-safe.troq-pc-dashboard-view #troqDashContent{
+
+  body.troq-pc-counter-safe.troq-pc-insights-first #mainUI2,
+  body.troq-pc-counter-safe.troq-pc-insights-first #troqDashboard{
     display:block!important;
+    width:100%!important;
+    max-width:none!important;
   }
-  body.troq-pc-counter-safe.troq-pc-dashboard-view #mainUI2,
-  body.troq-pc-counter-safe.troq-pc-dashboard-view #troqDashboard{
+
+  body.troq-pc-counter-safe.troq-pc-insights-first #troqDashContent{
     display:block!important;
+    width:100%!important;
+    max-width:none!important;
+    margin:0!important;
+    padding:28px 32px!important;
+  }
+
+  body.troq-pc-counter-safe.troq-pc-insights-first .troqDashContent{
+    max-width:none!important;
   }
 }
 </style>
 
-<script id="troqPcEscDashboardFixLogic">
+<script id="troqPcInsightsFirstLogic">
 (function(){
   function isPc(){
     return window.matchMedia('(min-width:901px) and (pointer:fine)').matches;
   }
 
-  function openDashboard(){
-    if(!isPc()) return;
-    document.body.classList.add('troq-pc-dashboard-view');
+  let booting=true;
+  let initialLiveStamp='';
+  let initialCartSignature='';
+
+  function cartSignature(data){
+    const cart=Array.isArray(data?.live_cart)?data.live_cart:[];
+    return JSON.stringify(cart.map(function(x){
+      return [String(x.id||''),String(x.name||''),Number(x.qty)||0,Number(x.price)||0];
+    }));
+  }
+
+  function showPcInsights(){
+    if(!isPc())return;
+    document.body.classList.add('troq-pc-insights-first');
 
     const main2=document.getElementById('mainUI2');
     const dash=document.getElementById('troqDashboard');
     const editor=document.getElementById('troqBillEditor');
 
-    if(main2) main2.classList.add('active');
-    if(dash) dash.hidden=false;
-    if(editor) editor.hidden=true;
+    if(main2)main2.classList.add('active');
+    if(dash)dash.hidden=false;
+    if(editor)editor.hidden=true;
 
     if(typeof troqShowDashboard==='function'){
-      troqShowDashboard('home');
+      troqShowDashboard('insights');
     }
   }
 
+  function showPcLive(){
+    if(!isPc())return;
+    document.body.classList.remove('troq-pc-insights-first');
+    if(typeof troqRenderLivePcPanel==='function')troqRenderLivePcPanel();
+  }
+
+  /* Every PC page load / refresh starts on Insights, never directly on old live_cart. */
+  function boot(){
+    if(!isPc())return;
+    try{
+      initialLiveStamp=String(troqMyData?.live_cart_updated_at||'');
+      initialCartSignature=cartSignature(troqMyData||{});
+    }catch(_){}
+    showPcInsights();
+    setTimeout(function(){ booting=false; },1200);
+  }
+
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',function(){setTimeout(boot,180);});
+  }else{
+    setTimeout(boot,180);
+  }
+
+  /* ESC always returns to full-width Insights on PC. */
   document.addEventListener('keydown',function(e){
-    if(!isPc() || (e.key!=='Escape' && e.key!=='Esc')) return;
+    if(!isPc() || (e.key!=='Escape' && e.key!=='Esc'))return;
     e.preventDefault();
     e.stopImmediatePropagation();
-    openDashboard();
+    showPcInsights();
   },true);
 
-  /* Phone live sync is untouched. When a new live cart update arrives,
-     show the live products screen again automatically on PC. */
-  window.addEventListener('troq-data-loaded',function(){
-    if(!isPc()) return;
-    try{
-      if(Array.isArray(troqMyData?.live_cart) && troqMyData.live_cart.length){
-        document.body.classList.remove('troq-pc-dashboard-view');
+  /* Existing phone -> PC sync stays untouched.
+     Only a NEW live_cart update after this PC session starts opens Live Products. */
+  window.addEventListener('troq-data-loaded',function(e){
+    if(!isPc())return;
+
+    const data=e.detail || (typeof troqMyData!=='undefined'?troqMyData:{});
+    const stamp=String(data?.live_cart_updated_at||'');
+    const sig=cartSignature(data);
+
+    if(booting){
+      initialLiveStamp=stamp;
+      initialCartSignature=sig;
+      showPcInsights();
+      return;
+    }
+
+    const changed=(stamp && stamp!==initialLiveStamp) || sig!==initialCartSignature;
+    if(changed){
+      initialLiveStamp=stamp;
+      initialCartSignature=sig;
+      if(Array.isArray(data?.live_cart) && data.live_cart.length){
+        showPcLive();
       }
-    }catch(_){}
+    }
   });
 })();
 </script>
