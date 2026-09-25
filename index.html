@@ -4173,11 +4173,26 @@ function troqRenderItems(content){troqCloseScanPage();content.innerHTML='<h1>Ite
     }
 
     if(e.target.closest('#troqPcPosCreate')){
-      /* Use the existing bill editor/save/print flow, but preload scanned items. */
       try{
         window.troqPcSelectedPayment=selectedPayment;
-        if(typeof troqLiveFillBillEditor==='function')troqLiveFillBillEditor();
-        else document.getElementById('troqLivePcCreate')?.click();
+
+        /* Fill/open the app's real bill editor directly. */
+        if(typeof troqLiveFillBillEditor==='function'){
+          troqLiveFillBillEditor();
+        }else{
+          const editor=document.getElementById('troqBillEditor');
+          if(editor)editor.hidden=false;
+        }
+
+        /* POS must not sit above the real bill editor. */
+        const pos=document.getElementById('troqPcPos');
+        if(pos){pos.classList.remove('open');pos.setAttribute('aria-hidden','true');}
+
+        const editor=document.getElementById('troqBillEditor');
+        if(editor){
+          editor.hidden=false;
+          editor.style.zIndex='9000';
+        }
       }catch(err){console.warn('Create bill:',err)}
     }
   });
@@ -4207,11 +4222,13 @@ function troqRenderItems(content){troqCloseScanPage();content.innerHTML='<h1>Ite
   },700);
 
   /* Existing PC live Create Bill becomes entry into the new POS screen. */
+  /* Existing Create Bill button: open PC POS without blocking normal app events. */
   document.addEventListener('click',function(e){
     if(isPc() && e.target.closest('#troqLivePcCreate')){
-      e.preventDefault();e.stopImmediatePropagation();openPos();
+      e.preventDefault();
+      openPos();
     }
-  },true);
+  });
 
   /* If existing billing editor closes after successful bill generation, go Insights. */
   const observer=new MutationObserver(function(){
@@ -4228,6 +4245,22 @@ function troqRenderItems(content){troqCloseScanPage();content.innerHTML='<h1>Ite
 
   window.troqOpenPcPos=openPos;
   window.troqShowPcInsights=showInsights;
+})();
+</script>
+
+
+<script id="troqPcBillClickHardFix">
+(function(){
+  function pc(){return matchMedia('(min-width:901px) and (pointer:fine)').matches}
+  document.addEventListener('click',function(e){
+    if(!pc())return;
+    const b=e.target.closest('#troqLivePcCreate,.troqLivePcCreate');
+    if(!b)return;
+    if(typeof window.troqOpenPcPos==='function'){
+      e.preventDefault();
+      window.troqOpenPcPos();
+    }
+  });
 })();
 </script>
 
