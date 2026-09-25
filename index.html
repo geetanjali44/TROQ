@@ -3904,6 +3904,74 @@ function troqRenderItems(content){troqCloseScanPage();content.innerHTML='<h1>Ite
 })();
 </script>
 
+
+<style id="troqPcTotalBottomFinal">
+@media (min-width:901px) and (pointer:fine){
+
+  /* Buttons one row ABOVE total */
+  body.troq-pc-counter-safe #troqLivePcCreate,
+  body.troq-pc-counter-safe .troqLivePcCreate,
+  body.troq-pc-counter-safe #troqLivePcPrinter,
+  body.troq-pc-counter-safe .troqLivePcPrinter,
+  body.troq-pc-counter-safe #troqLivePcClear,
+  body.troq-pc-counter-safe .troqLivePcClear{
+    bottom:82px!important;
+  }
+
+  /* TOTAL at the very bottom, above full width line */
+  body.troq-pc-counter-safe #troqLivePcPanel .troqLivePcTotal{
+    position:fixed!important;
+    left:24px!important;
+    right:24px!important;
+    bottom:18px!important;
+    z-index:4900!important;
+
+    width:auto!important;
+    height:48px!important;
+    margin:0!important;
+    padding:0!important;
+
+    display:flex!important;
+    align-items:center!important;
+    justify-content:space-between!important;
+
+    background:#f6f7f9!important;
+    border:0!important;
+    border-top:1px solid #e2e2e2!important;
+    font-size:18px!important;
+    font-weight:700!important;
+  }
+}
+</style>
+
+
+<style id="troqPcProductsSingleColumn">
+@media (min-width:901px) and (pointer:fine){
+  /* Products must always render one below another, never side-by-side */
+  body.troq-pc-counter-safe #troqLivePcPanel .troqLivePcItems{
+    display:flex!important;
+    flex-direction:column!important;
+    flex-wrap:nowrap!important;
+    grid-template-columns:none!important;
+    width:100%!important;
+  }
+
+  body.troq-pc-counter-safe #troqLivePcPanel .troqLivePcRow{
+    display:flex!important;
+    flex:0 0 auto!important;
+    width:100%!important;
+    max-width:100%!important;
+    min-width:100%!important;
+    box-sizing:border-box!important;
+    clear:both!important;
+  }
+
+  body.troq-pc-counter-safe #troqLivePcPanel .troqLivePcRow + .troqLivePcRow{
+    margin-top:0!important;
+  }
+}
+</style>
+
 </body>
 </html>
 <!-- TROQ receipt product column fix: product name aligns below PRODUCT -->
