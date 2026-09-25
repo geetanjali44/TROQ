@@ -3066,6 +3066,239 @@ function troqMobileReceiptUI(){
  };
  return root;
 }
+
+/* =========================================================
+   TROQ — MOBILE RECEIPT -> BLUETOOTH THERMAL PRINTER
+   Uses the same final synced bill shown on the phone.
+   Web Bluetooth works only where navigator.bluetooth is supported
+   and the printer exposes a writable BLE GATT characteristic.
+   ========================================================= */
+async function troqMobileEnsureBluetoothPrinter(){
+  if(troqConnectedPrinter?.gatt?.connected && troqWritableCharacteristic){
+    return true;
+  }
+  if(!navigator.bluetooth){
+    throw new Error("Direct Bluetooth printing is not supported by this browser. Use Android Chrome/compatible browser or the system Print option.");
+  }
+
+  const device=await navigator.bluetooth.requestDevice({
+    acceptAllDevices:true,
+    optionalServices:TROQ_BLE_SERVICES
+  });
+
+  if(!device?.gatt)throw new Error("Selected printer does not expose a BLE connection.");
+  const server=await device.gatt.connect();
+  if(!server.connected)throw new Error("Printer did not connect.");
+
+  const discovery=await troqFindWritableCharacteristic(server);
+  if(!discovery.characteristic){
+    try{device.gatt.disconnect();}catch(e){}
+    throw new Error("Printer connected, but no writable BLE printing channel was found.");
+  }
+
+  troqConnectedPrinter=device;
+  troqWritableCharacteristic=discovery.characteristic;
+
+  device.addEventListener("gattserverdisconnected",()=>{
+    if(troqConnectedPrinter===device){
+      troqConnectedPrinter=null;
+      troqWritableCharacteristic=null;
+    }
+  });
+
+  return true;
+}
+
+function troqMobileReceiptText(value){
+  // ESC/POS text fallback: thermal printers commonly expect simple byte text.
+  return String(value??"")
+    .replace(/₹/g,"Rs.")
+    .replace(/[^\x0A\x0D\x20-\x7E]/g,"?");
+}
+
+function troqMobileWrapText(value,width){
+  const clean=troqMobileReceiptText(value);
+  const result=[];
+  for(const paragraph of clean.split(/\r?\n/)){
+    let line="";
+    for(const word of paragraph.split(/\s+/)){
+      if(!word)continue;
+      if(word.length>width){
+        if(line){result.push(line);line="";}
+        for(let i=0;i<word.length;i+=width)result.push(word.slice(i,i+width));
+        continue;
+      }
+      if(line && line.length+1+word.length>width){result.push(line);line=word;}
+      else line+=(line?" ":"")+word;
+    }
+    if(line)result.push(line);
+  }
+  return result;
+}
+
+async function troqMobileImageUrlToRaster(url){
+  if(!url)return null;
+  try{
+    const img=new Image();
+    img.crossOrigin="anonymous";
+    img.src=url;
+    await img.decode();
+
+    const maxWidth=320,maxHeight=180;
+    const scale=Math.min(1,maxWidth/img.width,maxHeight/img.height);
+    const w=Math.max(1,Math.round(img.width*scale));
+    const h=Math.max(1,Math.round(img.height*scale));
+    const canvas=document.createElement("canvas");
+    canvas.width=w;canvas.height=h;
+    const ctx=canvas.getContext("2d",{willReadFrequently:true});
+    ctx.fillStyle="#fff";ctx.fillRect(0,0,w,h);
+    ctx.drawImage(img,0,0,w,h);
+    return troqCanvasRaster(canvas);
+  }catch(e){
+    console.warn("Receipt logo could not be rasterized for BLE print",e);
+    return null;
+  }
+}
+
+async function troqEscposFromFinalBill(bill){
+  const enc=new TextEncoder(),parts=[];
+  const add=(...bytes)=>parts.push(new Uint8Array(bytes));
+  const write=(value)=>parts.push(enc.encode(troqMobileReceiptText(value)));
+  const width=32;
+  const money=(n)=>Number(n||0).toFixed(2);
+  const right=(v,n)=>troqMobileReceiptText(v).slice(0,n).padStart(n," ");
+  const totalLine=(label,value)=>{
+    const v=money(value), l=troqMobileReceiptText(label);
+    write(l+" ".repeat(Math.max(1,width-l.length-v.length))+v+"\n");
+  };
+
+  const b=bill?.business||{};
+  const settings=bill?.settings||{};
+  const enabled=settings.enabled===true;
+  const flags=enabled
+    ? {logo:true,name:true,subtext:true,mobile:true,address:true,gst:true,fssai:false,bill_date:true,customer:false,customer_name:true,customer_mobile:true,customer_address:true,...(settings.fields||{})}
+    : {logo:true,name:true,subtext:true,mobile:true,address:true,gst:true,fssai:false,bill_date:true,customer:false,customer_name:true,customer_mobile:true,customer_address:true};
+
+  const items=Array.isArray(bill?.items)?bill.items:[];
+  const subtotal=Number(bill?.subtotal ?? items.reduce((a,x)=>a+Number(x.amount||Number(x.qty||0)*Number(x.price||0)),0));
+  const rate=enabled?Math.min(100,Math.max(0,Number(settings.gst_rate)||0)):0;
+  const gstAmount=enabled?Number(bill?.gst_amount ?? subtotal*rate/100):0;
+  const total=Number(bill?.total_amount ?? subtotal+gstAmount);
+
+  // Initialize + center
+  add(27,64); add(27,97,1);
+
+  if(flags.logo!==false && (b.logo_url||b.logo)){
+    const raster=await troqMobileImageUrlToRaster(b.logo_url||b.logo);
+    if(raster)parts.push(raster);
+  }
+
+  if(flags.name!==false && b.name){
+    add(27,33,48);
+    for(const line of troqMobileWrapText(b.name,16))write(line+"\n");
+    add(27,33,0);
+  }
+
+  if(flags.subtext!==false && b.subtext){
+    for(const line of troqMobileWrapText(b.subtext,32))write(line+"\n");
+  }
+  if(flags.mobile!==false && b.mobile)write(troqMobileReceiptText(b.mobile)+"\n");
+  if(flags.address!==false && b.address){
+    for(const line of troqMobileWrapText(b.address,32))write(line+"\n");
+  }
+  if(flags.gst!==false && b.gst)write("GSTIN: "+troqMobileReceiptText(b.gst)+"\n");
+  if(enabled && flags.fssai && settings.fssai_number)write("FSSAI: "+troqMobileReceiptText(settings.fssai_number)+"\n");
+
+  add(27,97,0);
+  write("--------------------------------\n");
+  if(flags.bill_date!==false && bill?.created_at){
+    write(troqMobileReceiptText(new Date(bill.created_at).toLocaleString("en-IN"))+"\n");
+    write("Bill: "+troqMobileReceiptText(bill.id||"")+"\n");
+    write("--------------------------------\n");
+  }
+
+  const customer=bill?.customer||{};
+  if(enabled && flags.customer && Object.values(customer).some(Boolean)){
+    if(flags.customer_name!==false && customer.name)write("Bill to: "+troqMobileReceiptText(customer.name)+"\n");
+    if(flags.customer_mobile!==false && customer.mobile)write("Mobile: "+troqMobileReceiptText(customer.mobile)+"\n");
+    if(flags.customer_address!==false && customer.address){
+      for(const line of troqMobileWrapText("Address: "+customer.address,32))write(line+"\n");
+    }
+    write("--------------------------------\n");
+  }
+
+  write("PRODUCT".padEnd(10)+right("QTY",5)+right("PRICE",8)+right("AMOUNT",9)+"\n");
+  write("--------------------------------\n");
+  for(const item of items){
+    const names=troqMobileWrapText(item.name||"",10);
+    const qty=Number(item.qty||0);
+    const price=Number(item.price||0);
+    const amount=Number(item.amount ?? qty*price);
+    write((names.shift()||"").padEnd(10)+right(qty,5)+right(money(price),8)+right(money(amount),9)+"\n");
+    for(const extra of names)write(extra+"\n");
+    write("................................\n");
+  }
+
+  totalLine("Subtotal",subtotal);
+  if(rate)totalLine("GST ("+rate+"%)",gstAmount);
+  add(27,69,1); totalLine("TOTAL",total); add(27,69,0);
+  write("--------------------------------\n");
+  add(27,97,1); write("Thank you!\n\n");
+  add(27,100,3);
+
+  const len=parts.reduce((n,p)=>n+p.length,0);
+  const out=new Uint8Array(len);
+  let offset=0;
+  for(const p of parts){out.set(p,offset);offset+=p.length;}
+  return out;
+}
+
+async function troqWriteBluetoothBytes(bytes){
+  if(!troqWritableCharacteristic)throw new Error("Bluetooth printer is not connected.");
+  const characteristic=troqWritableCharacteristic;
+
+  // Small chunks are intentionally used for inexpensive BLE thermal printers.
+  for(let i=0;i<bytes.length;i+=20){
+    const chunk=bytes.slice(i,i+20);
+    if(characteristic.properties.writeWithoutResponse && characteristic.writeValueWithoutResponse){
+      await characteristic.writeValueWithoutResponse(chunk);
+    }else if(characteristic.writeValueWithResponse){
+      await characteristic.writeValueWithResponse(chunk);
+    }else{
+      await characteristic.writeValue(chunk);
+    }
+    await new Promise(resolve=>setTimeout(resolve,35));
+  }
+}
+
+async function troqPrintSyncedBillFromMobile(bill,button){
+  if(!bill)return;
+  const original=button?.textContent||"Print";
+  if(button){button.disabled=true;button.textContent="Connecting...";}
+  try{
+    await troqMobileEnsureBluetoothPrinter();
+    if(button)button.textContent="Printing...";
+    const bytes=await troqEscposFromFinalBill(bill);
+    await troqWriteBluetoothBytes(bytes);
+    if(button){
+      button.textContent="Printed ✓";
+      setTimeout(()=>{button.disabled=false;button.textContent=original;},1600);
+    }
+  }catch(error){
+    console.warn("Mobile Bluetooth print",error);
+    if(button){button.disabled=false;button.textContent=original;}
+    // If direct BLE is unsupported, keep printing usable through the OS print dialog.
+    if(error?.name==="NotFoundError")return;
+    const useSystem=confirm((error?.message||"Bluetooth print failed")+"\n\nOpen system Print instead?");
+    if(useSystem){
+      const w=window.open("","_blank","width=420,height=700");
+      if(!w){alert("Please allow popups to print the receipt.");return;}
+      w.document.open();w.document.write(troqBillReceiptHtml(bill));w.document.close();
+      troqPrintWindow(w);
+    }
+  }
+}
+
 function troqRenderMobileReceipt(bill){
  if(!bill)return;
  let root=document.getElementById('troqExactMobileReceipt');
@@ -3076,13 +3309,10 @@ function troqRenderMobileReceipt(bill){
   root.innerHTML='<div style="height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;border-bottom:1px solid #eee;background:#fff;font-family:Arial,sans-serif"><strong>Bill receipt</strong><div style="display:flex;gap:8px"><button id="troqExactReceiptPrint" type="button" style="border:0;border-radius:9px;background:#ff2380;color:#fff;padding:9px 15px;font-weight:700">Print</button><button id="troqExactReceiptClose" type="button" style="border:0;border-radius:9px;background:#f1f1f1;padding:9px 13px;font-weight:700">Done</button></div></div><iframe id="troqExactReceiptFrame" title="Generated bill receipt" style="display:block;width:100%;height:calc(100dvh - 57px);border:0;background:#fff"></iframe>';
   document.body.appendChild(root);
   root.querySelector('#troqExactReceiptClose').onclick=()=>root.style.display='none';
-  root.querySelector('#troqExactReceiptPrint').onclick=()=>{
+  root.querySelector('#troqExactReceiptPrint').onclick=async(e)=>{
    const latest=troqLatestSyncedReceipt();
    if(!latest?.bill)return;
-   const w=window.open('','_blank','width=420,height=700');
-   if(!w){alert('Please allow popups to print the receipt.');return;}
-   w.document.open();w.document.write(troqBillReceiptHtml(latest.bill));w.document.close();
-   troqPrintWindow(w);
+   await troqPrintSyncedBillFromMobile(latest.bill,e.currentTarget);
   };
  }
  const frame=root.querySelector('#troqExactReceiptFrame');
