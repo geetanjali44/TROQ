@@ -3944,6 +3944,46 @@ function troqRenderItems(content){troqCloseScanPage();content.innerHTML='<h1>Ite
 }
 </style>
 
+
+<script id="troqPcEscapeDashboardOnly">
+(function(){
+  function troqIsPcOnly(){
+    return window.matchMedia('(min-width:901px) and (pointer:fine)').matches;
+  }
+
+  document.addEventListener('keydown', function(e){
+    if(e.key !== 'Escape' || !troqIsPcOnly()) return;
+
+    e.preventDefault();
+
+    /* Close only PC billing/live overlays if they are open. */
+    const billEditor = document.getElementById('troqBillEditor');
+    if(billEditor) billEditor.hidden = true;
+
+    const scanPage = document.getElementById('troqScanPage');
+    if(scanPage && scanPage.classList.contains('open') && typeof troqCloseScanPage === 'function'){
+      troqCloseScanPage();
+    }
+
+    const scannerOverlay = document.getElementById('troqScannerOverlay');
+    if(scannerOverlay && typeof troqCloseScannerSheet === 'function'){
+      try{ troqCloseScannerSheet(); }catch(_){}
+    }
+
+    /* Return to the app's existing dashboard. No mobile behavior changed. */
+    try{
+      if(typeof troqShowDashboard === 'function'){
+        troqShowDashboard('home');
+      }
+      const dashboard = document.getElementById('troqDashboard');
+      if(dashboard) dashboard.hidden = false;
+    }catch(err){
+      console.warn('PC ESC dashboard:', err);
+    }
+  });
+})();
+</script>
+
 </body>
 </html>
 <!-- TROQ receipt product column fix: product name aligns below PRODUCT -->
